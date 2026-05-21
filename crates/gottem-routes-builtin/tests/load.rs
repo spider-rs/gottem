@@ -172,6 +172,42 @@ fn register_all_succeeds_with_default_features() {
     assert_eq!(catalog.len(), expected, "route count mismatch");
 }
 
+#[cfg(all(feature = "browserbase", feature = "browser-use"))]
+#[test]
+fn browserbase_and_browser_use_load_at_t9() {
+    use gottem_core::{AdapterKind, AuthSpec};
+    let catalog = gottem_routes_builtin::add_browserbase(RouteCatalogBuilder::new())
+        .unwrap()
+        .add_toml(gottem_routes_builtin::embedded::BROWSER_USE)
+        .unwrap()
+        .build();
+
+    let bb = catalog.get("browserbase.cdp").unwrap();
+    assert_eq!(bb.tier, Tier::T9);
+    assert_eq!(bb.adapter, AdapterKind::ChromeCdp);
+    assert!(
+        bb.endpoint.is_template(),
+        "browserbase auth is in URL template"
+    );
+    assert!(bb.endpoint.as_str().contains("{{env:BROWSERBASE_API_KEY}}"));
+    assert!(bb
+        .endpoint
+        .as_str()
+        .contains("{{env:BROWSERBASE_PROJECT_ID}}"));
+
+    let bu = catalog.get("browseruse.cloud").unwrap();
+    assert_eq!(bu.tier, Tier::T9);
+    match &bu.adapter {
+        AdapterKind::Custom(name) => assert_eq!(name.as_ref(), "browser_use"),
+        other => panic!("expected Custom(browser_use), got {other:?}"),
+    }
+    assert!(bu.caps.captcha, "browser-use's AI can solve captchas");
+    match &bu.auth {
+        AuthSpec::Bearer { env } => assert_eq!(env, "BROWSER_USE_API_KEY"),
+        other => panic!("expected Bearer for browser-use, got {other:?}"),
+    }
+}
+
 #[cfg(feature = "two-captcha")]
 #[test]
 fn two_captcha_loads_with_custom_adapter_and_captcha_caps() {

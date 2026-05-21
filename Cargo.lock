@@ -1121,6 +1121,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gottem-adapters-browseruse"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "gottem-core",
+ "http",
+ "reqwest 0.13.3",
+ "serde_json",
+ "tokio",
+ "url",
+ "wiremock",
+]
+
+[[package]]
 name = "gottem-adapters-captcha"
 version = "0.1.0"
 dependencies = [
@@ -1183,6 +1198,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "gottem-adapters-browseruse",
  "gottem-adapters-captcha",
  "gottem-adapters-chrome",
  "gottem-adapters-http",

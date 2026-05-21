@@ -201,6 +201,7 @@ fn build_setup(config_path: Option<&std::path::Path>) -> Result<Setup> {
     #[cfg(feature = "chrome")]
     registry.register(gottem_adapters_chrome::ChromeCdpAdapter::arc());
     registry.register(gottem_adapters_captcha::Captcha2CaptchaAdapter::arc());
+    registry.register(gottem_adapters_browseruse::BrowserUseAdapter::arc());
 
     Ok(Setup {
         catalog,

@@ -1,23 +1,22 @@
 # Browser Use Cloud — AI-driven browser agent. Takes a natural-language task.
 #
 # Env var: BROWSER_USE_API_KEY
-# Endpoint: https://api.browser-use.com/api/v1/run-task
+# Endpoint: handled internally by gottem-adapters-browseruse (POST /api/v1/run-task
+#          to submit, GET /api/v1/task/{id} to poll until status=="finished").
 # Docs:    https://docs.browser-use.com/cloud-api/
 #
-# NOTE: Browser Use's Cloud API is async — `/run-task` returns a task_id, then you
-# poll `/api/v1/task/{task_id}` for the output. This route currently submits the
-# task and returns the task_id as `content`; a dedicated BrowserUseAdapter with
-# submit+poll semantics (mirroring gottem-adapters-captcha) can lift this to a
-# one-shot fetch. Until then, callers chain the poll themselves.
+# The `browser_use` adapter resolves the full submit + poll cycle inside one
+# fetch — you get the AI's final `output` as `content`, no separate polling
+# step required.
 
 [[route]]
 id          = "browseruse.cloud"
-adapter     = "http_json"
-endpoint    = "https://api.browser-use.com/api/v1/run-task"
+adapter     = "browser_use"
+endpoint    = "https://api.browser-use.com/"   # base URL; adapter constructs /api/v1/* paths
 method      = "POST"
 tier        = 9
 cost        = 1000              # ~$0.10/task baseline (AI agent compute is consumption-based)
-timeout_ms  = 60000             # task submission only; the AI run continues server-side
+timeout_ms  = 720000             # full submit + poll ceiling (~12 minutes)
 concurrency = 2
 
 [route.auth]
@@ -27,10 +26,6 @@ env  = "BROWSER_USE_API_KEY"
 [route.body]
 kind     = "json"
 template = '''{"task":"Visit {{url}} and extract the main content as clean markdown. Return only the content, no commentary.","save_browser_data":false,"use_adblock":true,"use_proxy":true}'''
-
-[route.parse]
-kind = "json_path"
-path = "$.id"                   # task_id — caller must poll /api/v1/task/{id} for the result
 
 [route.caps]
 js          = true

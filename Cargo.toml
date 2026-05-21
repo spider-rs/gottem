@@ -6,6 +6,7 @@ members = [
     "crates/gottem-adapters-http",
     "crates/gottem-adapters-chrome",
     "crates/gottem-adapters-captcha",
+    "crates/gottem-adapters-browseruse",
     "crates/gottem-routes-builtin",
     "crates/gottem-cli",
 ]
