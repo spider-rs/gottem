@@ -10,7 +10,7 @@ use gottem_core::{
     EndpointTemplate, FetchError, HttpMethod, Route, ScrapeRequest, Tier,
 };
 use url::Url;
-use wiremock::matchers::{header, method, path, path_regex};
+use wiremock::matchers::{method, path, path_regex};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn browseruse_route() -> Route {

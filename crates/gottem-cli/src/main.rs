@@ -435,8 +435,8 @@ fn run_routes(action: RoutesAction, setup: Setup) -> Result<()> {
 
 fn routes_list(catalog: &RouteCatalog) -> Result<()> {
     println!(
-        "{:<38} {:<5} {:>9} {:<22} {:<10} {}",
-        "ID", "TIER", "COST", "ADAPTER", "JS", "AUTH ENV"
+        "{:<38} {:<5} {:>9} {:<22} {:<10} AUTH ENV",
+        "ID", "TIER", "COST", "ADAPTER", "JS"
     );
     println!("{}", "-".repeat(110));
     let mut routes: Vec<_> = catalog.all().collect();

@@ -7,11 +7,11 @@
 //! - [`Route`] describes a vendor endpoint as **data** (no per-vendor code path).
 //! - [`AdapterKind`] is a small finite set of protocols
 //!   ([`DirectHttp`](AdapterKind::DirectHttp),
-//!    [`HttpJson`](AdapterKind::HttpJson),
-//!    [`HttpJsonlStream`](AdapterKind::HttpJsonlStream),
-//!    [`ChromeCdp`](AdapterKind::ChromeCdp),
-//!    [`SpiderLocal`](AdapterKind::SpiderLocal),
-//!    [`Custom`](AdapterKind::Custom)).
+//!   [`HttpJson`](AdapterKind::HttpJson),
+//!   [`HttpJsonlStream`](AdapterKind::HttpJsonlStream),
+//!   [`ChromeCdp`](AdapterKind::ChromeCdp),
+//!   [`SpiderLocal`](AdapterKind::SpiderLocal),
+//!   [`Custom`](AdapterKind::Custom)).
 //! - [`RouteCatalog`] is a frozen registry of routes loadable from TOML.
 //! - [`Orchestrator`] drives requests against the catalog with cheap/race/hedge modes.
 //! - [`RetryDirective`] additively wraps [`spider::retry_strategy::RetryDirective`] with

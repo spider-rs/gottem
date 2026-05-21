@@ -49,6 +49,9 @@ impl RouteCatalogBuilder {
         Self::default()
     }
 
+    // Intentionally named `add` for readable builder chains; the name shadow with
+    // `std::ops::Add::add` is harmless because this method takes a `Route`, not Self.
+    #[allow(clippy::should_implement_trait)]
     pub fn add(mut self, route: Route) -> Self {
         self.routes.push(Arc::new(route));
         self

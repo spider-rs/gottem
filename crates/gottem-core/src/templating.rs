@@ -2,11 +2,11 @@
 //!
 //! Supported placeholders:
 //!
-//! - `{{url}}`           — the request URL. Percent-encoded for endpoint templates,
-//!                          raw for body templates (so JSON bodies look natural).
-//! - `{{method}}`        — the request method as a string (`GET`, `POST`, ...).
-//! - `{{env:NAME}}`      — environment variable lookup; missing env → [`FetchError::Auth`].
-//!                          Percent-encoded for endpoint templates, raw for body templates.
+//! - `{{url}}` — the request URL. Percent-encoded for endpoint templates,
+//!   raw for body templates (so JSON bodies look natural).
+//! - `{{method}}` — the request method as a string (`GET`, `POST`, ...).
+//! - `{{env:NAME}}` — environment variable lookup; missing env → [`FetchError::Auth`].
+//!   Percent-encoded for endpoint templates, raw for body templates.
 //!
 //! # Why two render modes
 //!

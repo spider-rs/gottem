@@ -717,8 +717,8 @@ mod tests {
         }
         let entry = stats.get(&r, &url).unwrap();
         assert_eq!(entry.success_count(), 50 * 20);
-        // EMA should be in the recorded range (100..120ms).
+        // EMA should be in the recorded range (100..=120ms).
         let ema = entry.ema_latency_ms();
-        assert!(ema >= 100 && ema <= 120, "ema out of range: {ema}");
+        assert!((100..=120).contains(&ema), "ema out of range: {ema}");
     }
 }

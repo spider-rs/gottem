@@ -22,9 +22,10 @@ use crate::{
 pub use spider::utils::hedge::{HedgeConfig, HedgeTracker};
 
 /// Orchestration mode passed to [`Orchestrator::fetch`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum Mode {
     /// Sequential cheapest-first via the supplied [`RetryStrategy`].
+    #[default]
     Cheap,
     /// Fire `max_parallel` routes at the same tier in parallel; first valid wins.
     Race { max_parallel: usize },
@@ -34,12 +35,6 @@ pub enum Mode {
     Ladder { hedge_delay: Duration },
     /// Cheap mode capped by an inline budget ceiling.
     Budget { ceiling_milli: u64 },
-}
-
-impl Default for Mode {
-    fn default() -> Self {
-        Mode::Cheap
-    }
 }
 
 pub struct Orchestrator {

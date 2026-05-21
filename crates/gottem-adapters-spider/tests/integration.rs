@@ -6,14 +6,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bytes::Bytes;
 use gottem_adapters_spider::SpiderAdapter;
 use gottem_core::{
     Adapter, AdapterContext, AdapterKind, CancelToken, Capabilities, EndpointTemplate, FetchError,
     HttpMethod, Route, ScrapeRequest, Tier, Validator,
 };
 use url::Url;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn route_for(server_url: &str) -> Route {
@@ -62,7 +61,7 @@ async fn fetches_200_html_and_returns_content() {
         .await
         .expect("expected success");
     assert_eq!(resp.status, 200);
-    assert!(resp.body.len() > 0, "body should not be empty");
+    assert!(!resp.body.is_empty(), "body should not be empty");
     let content = resp.content.expect("content present");
     assert!(
         content.contains("hello world"),
