@@ -1,34 +1,42 @@
-//! gottem adapter that drives [`spider::website::Website`] for local fetching.
+//! gottem adapter for **single-page** fetching via spider — uses `Page::new(url, &client)`,
+//! the most direct primitive in spider's API. No crawl scheduler, no broadcast channels,
+//! no link discovery. One URL in, one Page out.
 //!
-//! Covers tiers **T0–T3**:
+//! ## What you get
 //!
-//! | Tier | What you configure on the route       | Spider gives you                        |
-//! |------|---------------------------------------|-----------------------------------------|
-//! | T0   | bare `endpoint`                       | reqwest HTTP                            |
-//! | T1   | `proxies = [...]` (datacenter)        | + rotating proxy                        |
-//! | T2   | `proxies = [...]` (residential)       | + residential pool                      |
-//! | T3   | `chrome` feature enabled              | + headless chrome (stealth/fingerprint) |
+//! - Spider's hardened HTTP client (cookies, UA generator, encoding handling, TLS).
+//! - Predictable status code propagation — upstream 5xx surfaces as the real status,
+//!   not filtered by the crawler's retry logic.
+//! - Cross-platform consistency: Linux and macOS behave identically because there's no
+//!   crawl scheduler in between.
 //!
-//! ## Real-time streaming, no page storage
+//! ## What this adapter *doesn't* do
 //!
-//! Spider's `scrape()` accumulates a `Vec<Page>` in memory before returning. For
-//! a single-page adapter that's wasted work — we only need the *first* page.
+//! - **No crawling.** This is single-URL fetch only. Recursive crawling lives elsewhere
+//!   in your stack — gottem stays in "fetch one resource" lane.
+//! - **No per-request headers.** Headers are baked into the shared `spider::Client` at
+//!   adapter construction time. If you need per-request headers, route through
+//!   `gottem-adapters-http` instead.
 //!
-//! This adapter calls `Website::subscribe()` to get a broadcast channel, spawns
-//! `Website::crawl()` in a background task, and takes the first page off the
-//! channel. As soon as the first page arrives we abort the rest of the crawl.
-//! Memory footprint is one [`Page`], not a vec.
+//! ## Tier coverage
+//!
+//! `AdapterKind::SpiderLocal` is the bridge for T0–T3:
+//!
+//! | Tier | What you configure              | What spider provides                   |
+//! |------|---------------------------------|----------------------------------------|
+//! | T0   | bare `endpoint`                 | reqwest HTTP (via spider's Client)     |
+//! | T1   | proxy list on the Client builder| + rotating datacenter proxy            |
+//! | T2   | residential proxy on Client     | + residential pool                     |
+//! | T3   | `chrome` feature flag           | (use the chrome adapter for that tier) |
 //!
 //! ## Cancellation
 //!
-//! The adapter races `rx.recv()` against [`CancelToken::cancelled`] via
-//! `tokio::select!`. On cancel, the spawned crawl task is aborted, which drops
-//! spider's in-flight reqwest future and unwinds tasks cleanly.
-//!
-//! ## No regression
-//!
-//! Pure consumer of the spider crate. Same path spider takes when used directly
-//! with `Website::new(url).with_limit(1).subscribe(_).crawl().await`.
+//! `Page::new` is wrapped in `tokio::select!` against the orchestrator's
+//! [`CancelToken`]. On cancel the future is dropped, which closes the underlying
+//! reqwest connection cleanly.
+
+#![forbid(unsafe_code)]
+#![deny(rust_2018_idioms)]
 
 use std::sync::Arc;
 
@@ -39,16 +47,42 @@ use gottem_core::{
     ScrapeResponse,
 };
 
-#[derive(Debug, Default, Clone)]
-pub struct SpiderAdapter;
+/// Single-page adapter. One [`spider::Client`] is built per adapter instance and reused
+/// across every call — connection pooling, DNS caching, and cookie state all persist.
+#[derive(Debug, Clone)]
+pub struct SpiderAdapter {
+    client: spider::Client,
+}
+
+impl Default for SpiderAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl SpiderAdapter {
     pub fn new() -> Self {
-        Self
+        // ClientBuilder::default() returns a fully-configured spider Client with sensible
+        // defaults (UA generator, cookies, encoding, TLS). For T1/T2 (proxy tiers),
+        // construct via `with_client` passing a Client that has proxies wired in.
+        let client = spider::ClientBuilder::default()
+            .build()
+            .expect("spider default client");
+        Self { client }
     }
-    /// Construct an `Arc<dyn Adapter>` ready to register with [`gottem_core::AdapterRegistry`].
+
+    /// Plug in a pre-configured `spider::Client` — e.g. one with proxies, custom UA, or
+    /// headers baked in. Use this to make a single SpiderAdapter cover T0–T2.
+    pub fn with_client(client: spider::Client) -> Self {
+        Self { client }
+    }
+
     pub fn arc() -> Arc<dyn Adapter> {
         Arc::new(Self::new())
+    }
+
+    pub fn arc_with_client(client: spider::Client) -> Arc<dyn Adapter> {
+        Arc::new(Self::with_client(client))
     }
 }
 
@@ -65,56 +99,15 @@ impl Adapter for SpiderAdapter {
         ctx: &AdapterContext,
         cancel: &CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
-        let url_str = req.url.as_str().to_string();
-        let mut website = spider::website::Website::new(&url_str);
+        let url_str = req.url.as_str();
 
-        // Single-page fast path (spider's `single_page()` check fires on with_limit(1)).
-        // Disable robots.txt because callers using this adapter are explicitly choosing
-        // direct fetch — the orchestrator's tier ladder is the policy layer, not robots.
-        website
-            .with_limit(1)
-            .with_respect_robots_txt(false)
-            .with_request_timeout(Some(route.timeout()));
-
-        // Per-request headers via spider's reqwest re-export.
-        if !req.headers.is_empty() {
-            use spider::reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-            let mut headers = HeaderMap::new();
-            for (k, v) in &req.headers {
-                if let (Ok(name), Ok(val)) = (
-                    HeaderName::try_from(k.as_str()),
-                    HeaderValue::try_from(v.as_str()),
-                ) {
-                    headers.insert(name, val);
-                }
-            }
-            if !headers.is_empty() {
-                website.with_headers(Some(headers));
-            }
-        }
-
-        // Subscribe BEFORE moving website into the crawl task — capacity 2 leaves
-        // headroom in case spider buffers the page emission.
-        let mut rx = website.subscribe(2);
-
-        // Run the crawl in a background task; the broadcast channel feeds us the page
-        // in real time without spider building up a Vec<Page> on the side.
-        let crawl_handle = tokio::spawn(async move {
-            website.crawl().await;
-        });
-
+        // Single-page fetch. No crawl scheduler, no broadcast channel — just an HTTP GET
+        // through spider's hardened client. `Page::new` returns a Page even on upstream
+        // errors; we read status_code below and map >=400 to FetchError::Status.
         let page = tokio::select! {
             biased;
-            _ = cancel.cancelled() => {
-                crawl_handle.abort();
-                return Err(FetchError::Cancelled);
-            }
-            res = rx.recv() => {
-                // Got a page (or channel closed). Abort the rest of the crawl regardless —
-                // for a single-page fetch we don't care about anything past the first emission.
-                crawl_handle.abort();
-                res.map_err(|e| FetchError::Network(format!("spider broadcast recv: {e}")))?
-            }
+            _ = cancel.cancelled() => return Err(FetchError::Cancelled),
+            p = spider::page::Page::new(url_str, &self.client) => p,
         };
 
         let final_url = url::Url::parse(page.get_url()).unwrap_or_else(|_| req.url.clone());
