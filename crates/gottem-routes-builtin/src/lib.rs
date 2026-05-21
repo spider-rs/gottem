@@ -140,7 +140,8 @@ pub fn add_oxylabs(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchE
 
 /// 2Captcha solver — returns a captcha TOKEN (not page HTML). Use in chains:
 /// fetch primary → extract siteKey → solve via this route → replay with token.
-/// Requires env var `TWO_CAPTCHA_API_KEY`.
+/// Requires env var `2CAPTCHA_API_KEY` (set via dotenv / `env` prefix / CI secret —
+/// names beginning with a digit aren't POSIX-valid and shells refuse `export` for them).
 #[cfg(feature = "two-captcha")]
 pub fn add_two_captcha(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
     b.add_toml(include_str!("../routes/two_captcha.toml"))

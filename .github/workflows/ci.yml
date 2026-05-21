@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel in-progress runs on the same branch when a new push arrives.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # spider's chromiumoxide build is heavy; let cargo use all cores.
+  CARGO_BUILD_JOBS: 4
+  # Don't fail builds on benign warnings from upstream `spider` source — clippy on our
+  # own workspace still denies warnings.
+  RUSTFLAGS: "--cap-lints warn"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # fmt: cheap, runs first, fails fast on style.
+  # ---------------------------------------------------------------------------
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  # ---------------------------------------------------------------------------
+  # build + test: real build with spider checked out as a sibling.
+  #
+  # gottem's Cargo.toml declares `spider = { path = "../spider/spider" }`. We
+  # reproduce that layout by checking out gottem and spider into siblings
+  # under $GITHUB_WORKSPACE.
+  # ---------------------------------------------------------------------------
+  test:
+    name: build + test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout spider (path dep)
+        uses: actions/checkout@v4
+        with:
+          repository: spider-rs/spider
+          path: spider
+
+      - name: Checkout gottem
+        uses: actions/checkout@v4
+        with:
+          path: gottem
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gottem
+          # Cache key incorporates spider's commit so a new spider invalidates appropriately.
+          shared-key: gottem-with-spider
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: cargo check (all features)
+        working-directory: gottem
+        run: cargo check --workspace --features gottem-routes-builtin/all --all-targets
+
+      - name: cargo clippy (deny warnings on our workspace)
+        working-directory: gottem
+        run: cargo clippy --workspace --features gottem-routes-builtin/all --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: gottem
+        run: cargo test --workspace --features gottem-routes-builtin/all --no-fail-fast
+
+      - name: cargo test (no default features — verify lean build)
+        working-directory: gottem
+        run: |
+          cargo check -p gottem-routes-builtin --no-default-features
+          cargo check -p gottem-cli --no-default-features

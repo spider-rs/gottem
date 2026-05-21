@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/logo.svg" width="540" alt="gottem — universal scraper that always gets the data">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/gottem-logo-github-dark.svg">
+    <img alt="gottem — universal scraper that always gets the data" src="assets/gottem-logo-github-light.svg" width="540">
+  </picture>
 </p>
 
 <p align="center">
@@ -91,9 +94,11 @@ You can pin the tier band you want with `--tier-min` / `--tier-max`, or hard-cap
 | Spider Browser Cloud      | 1              | `SPIDER_CLOUD_API_KEY` (shared)  |
 | Apify                     | 1              | `APIFY_API_TOKEN`                |
 | Oxylabs Web Scraper       | 1              | `OXYLABS_USER` + `OXYLABS_PASS`  |
-| 2Captcha solver           | 1              | `TWO_CAPTCHA_API_KEY`            |
+| 2Captcha solver           | 1              | `2CAPTCHA_API_KEY` (¹)           |
 
 Don't see your vendor? Drop a TOML file in `crates/gottem-routes-builtin/routes/` and you're done. See **Adding a vendor** below.
+
+> ¹ `2CAPTCHA_API_KEY` starts with a digit, so POSIX shells (bash, zsh) refuse `export 2CAPTCHA_API_KEY=...`. Use a `.env` loader, prefix the binary with `env 2CAPTCHA_API_KEY=...`, or inject through your CI's secret store. Rust reads it via `std::env::var` regardless of how it got set.
 
 ---
 

@@ -28,6 +28,7 @@ fn base_route(server: &MockServer, adapter: AdapterKind, parse: ResponseParse) -
         validate: vec![Validator::MinBytes { n: 1 }],
         tier: Tier::T4,
         cost: 10,
+        priority: 100,
         caps: Capabilities::default(),
         timeout_ms: 5_000,
         concurrency: 4,

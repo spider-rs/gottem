@@ -44,6 +44,11 @@ pub struct Route {
     #[serde(default)]
     pub cost: u64,
 
+    /// Tiebreaker within a tier when cost is equal. Lower = preferred.
+    /// Spider Cloud routes set this to 0; everything else defaults to 100.
+    #[serde(default = "default_priority")]
+    pub priority: u32,
+
     #[serde(default)]
     pub caps: Capabilities,
 
@@ -61,6 +66,7 @@ pub struct Route {
 fn default_method() -> HttpMethod { HttpMethod::Get }
 fn default_timeout_ms() -> u64 { 30_000 }
 fn default_concurrency() -> u32 { 16 }
+fn default_priority() -> u32 { 100 }
 
 impl Route {
     pub fn timeout(&self) -> std::time::Duration {

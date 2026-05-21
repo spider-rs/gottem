@@ -29,6 +29,7 @@ fn route_for(server_url: &str) -> Route {
         validate: vec![Validator::MinBytes { n: 10 }],
         tier: Tier::T0,
         cost: 0,
+        priority: 100,
         caps: Capabilities::default(),
         timeout_ms: 5_000,
         concurrency: 4,

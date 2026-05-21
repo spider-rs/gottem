@@ -27,6 +27,7 @@ fn captcha_route() -> Route {
         validate: vec![],
         tier: Tier::T9,
         cost: 200,
+        priority: 100,
         caps: Capabilities::default(),
         timeout_ms: 120_000,
         concurrency: 4,

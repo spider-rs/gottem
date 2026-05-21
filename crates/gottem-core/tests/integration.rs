@@ -106,6 +106,7 @@ fn route(id: &str, tier: Tier, cost: u64) -> Route {
         validate: vec![Validator::MinBytes { n: 500 }],
         tier,
         cost,
+        priority: 100,
         caps: Capabilities::default(),
         timeout_ms: 5_000,
         concurrency: 8,

@@ -12,6 +12,7 @@ endpoint    = "wss://browser.spider.cloud/v1/browser?api_key={{env:SPIDER_CLOUD_
 method      = "GET"
 tier        = 8
 cost        = 150
+priority    = 0
 timeout_ms  = 90000
 concurrency = 5
 

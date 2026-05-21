@@ -1,6 +1,12 @@
 # 2Captcha solver route — used in CAPTCHA chains.
 #
-# Env var: TWO_CAPTCHA_API_KEY
+# Env var: 2CAPTCHA_API_KEY
+#   Note: names starting with a digit aren't POSIX-valid, so bash/zsh refuse
+#         `export 2CAPTCHA_API_KEY=...`. Use one of:
+#           - a .env loader (dotenv) before launching gottem
+#           - inline:  env 2CAPTCHA_API_KEY=sk-... gottem fetch ...
+#           - your secrets manager / CI's secret injection (always works)
+#
 # Endpoint: https://2captcha.com/  (adapter handles in.php submit + res.php polling internally)
 # Docs:    https://2captcha.com/2captcha-api
 #
@@ -29,7 +35,7 @@ concurrency = 4
 
 [route.auth]
 kind = "bearer"
-env  = "TWO_CAPTCHA_API_KEY"
+env  = "2CAPTCHA_API_KEY"
 
 [route.caps]
 captcha = true

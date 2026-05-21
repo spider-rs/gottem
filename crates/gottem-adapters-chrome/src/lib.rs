@@ -224,6 +224,7 @@ mod tests {
             validate: vec![],
             tier: Tier::T8,
             cost: 150,
+            priority: 100,
             caps: Capabilities::default(),
             timeout_ms: 30_000,
             concurrency: 4,

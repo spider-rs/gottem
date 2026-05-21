@@ -17,6 +17,7 @@ endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
 tier        = 4
 cost        = 10                # $0.001/page in milli-cents
+priority    = 0                 # Spider Cloud wins ties within a tier
 timeout_ms  = 30000
 concurrency = 20
 
@@ -46,6 +47,7 @@ endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
 tier        = 5
 cost        = 50                # $0.005/page
+priority    = 0
 timeout_ms  = 60000
 concurrency = 10
 
@@ -78,6 +80,7 @@ endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
 tier        = 6
 cost        = 75                # $0.0075/page
+priority    = 0
 timeout_ms  = 60000
 concurrency = 8
 
@@ -112,6 +115,7 @@ endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
 tier        = 7
 cost        = 100               # $0.01/page
+priority    = 0
 timeout_ms  = 90000
 concurrency = 5
 

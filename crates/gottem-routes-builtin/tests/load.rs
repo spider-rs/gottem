@@ -144,7 +144,7 @@ fn two_captcha_loads_with_custom_adapter_and_captcha_caps() {
         other => panic!("expected Custom(captcha_2captcha), got {other:?}"),
     }
     match &r.auth {
-        AuthSpec::Bearer { env } => assert_eq!(env, "TWO_CAPTCHA_API_KEY"),
+        AuthSpec::Bearer { env } => assert_eq!(env, "2CAPTCHA_API_KEY"),
         other => panic!("expected Bearer auth, got {other:?}"),
     }
     assert!(r.caps.captcha, "captcha route must advertise captcha capability");

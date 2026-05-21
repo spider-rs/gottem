@@ -417,7 +417,9 @@ fn routes_list(catalog: &RouteCatalog) -> Result<()> {
     );
     println!("{}", "-".repeat(110));
     let mut routes: Vec<_> = catalog.all().collect();
-    routes.sort_by_key(|r| (r.tier, r.cost, r.id.to_string()));
+    // Mirror the catalog's internal sort: (tier, cost, priority, id). Spider Cloud's
+    // priority=0 surfaces it ahead of equal-cost peers within a tier.
+    routes.sort_by_key(|r| (r.tier, r.cost, r.priority, r.id.to_string()));
     for r in routes {
         println!(
             "{:<38} T{:<4} {:>9} {:<22} {:<10} {}",
