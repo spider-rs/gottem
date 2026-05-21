@@ -1,0 +1,108 @@
+# gottem
+
+> Universal scraper. One CLI and one Rust library that talks to every major scraping vendor through a single tiered ladder. Cheapest-first by default; escalates on failure; races or hedges when latency matters. Powered by [spider](https://github.com/spider-rs/spider).
+
+Built around two concepts: **routes** are data (TOML rows describing a vendor endpoint), **adapters** are code (a small finite set of protocol families). Adding a new vendor is a config change, not a release. 22 builtin routes across 13 vendors span T0–T9 of the cost/capability ladder.
+
+## Crates
+
+- [gottem-core](crates/gottem-core/src/lib.rs): traits + types + orchestrator + retry strategies + waterfall stats.
+- [gottem-adapters-spider](crates/gottem-adapters-spider/src/lib.rs): single-page fetch via `spider::page::Page::new_page` (T0-T3).
+- [gottem-adapters-http](crates/gottem-adapters-http/src/lib.rs): `direct_http` / `http_json` / `http_jsonl_stream` for cloud REST APIs.
+- [gottem-adapters-chrome](crates/gottem-adapters-chrome/src/lib.rs): `chrome_cdp` adapter — remote browser via WebSocket DevTools Protocol (T8).
+- [gottem-adapters-captcha](crates/gottem-adapters-captcha/src/lib.rs): 2Captcha submit + poll for solver chains.
+- [gottem-adapters-browseruse](crates/gottem-adapters-browseruse/src/lib.rs): Browser Use Cloud AI agent (submit + poll, returns final output).
+- [gottem-routes-builtin](crates/gottem-routes-builtin/routes/): embedded vendor TOML, feature-gated per vendor.
+- [gottem-cli](crates/gottem-cli/src/main.rs): `gottem` binary — `fetch` / `probe` / `routes`.
+
+## CLI
+
+```sh
+gottem fetch URL [--mode ladder|race|hedge] [--budget-mc N] [--tier-min N --tier-max M] [--require-js] [--routes a,b,c] [--format content|json] [--show-meta]
+gottem probe URL [--tier-min N --tier-max M] [--min-bytes 500]
+gottem routes list                       # tabular catalog
+gottem routes show <route-id>            # full route detail
+gottem routes validate                   # check env vars per route's auth
+gottem --config routes.toml fetch URL    # layer custom routes on top of builtin
+```
+
+Hedge mode adds `--hedge-delay-ms` and `--hedge-count`. Race mode honors `--routes a,b,c`.
+
+## Tier ladder
+
+- **T0**: free local HTTP via spider::Client
+- **T1–T2**: same + proxy rotation
+- **T3**: local headless Chrome (chrome adapter)
+- **T4** ($0.001/page): Firecrawl, Spider Cloud HTTP, ScrapingBee, ZenRows basic
+- **T5** ($0.005): + JS render
+- **T6** ($0.0075): + residential proxy
+- **T7** ($0.008–$0.010): smart unblockers — Spider Cloud Smart, Zyte API, Brightdata Unblocker
+- **T8** ($0.010–$0.015): browser-as-a-service — Browserless, Brightdata Scraping Browser, Spider Browser Cloud
+- **T9** ($0.02+): last resort — Apify, Oxylabs, 2Captcha solver chains, Browser Use AI agent, Browserbase
+
+Within a tier, cheapest first; Spider Cloud's `priority = 0` wins cost ties.
+
+## Routes are data
+
+```toml
+[[route]]
+id          = "firecrawl.scrape"
+adapter     = "http_json"
+endpoint    = "https://api.firecrawl.dev/v1/scrape"
+method      = "POST"
+tier        = 4
+cost        = 10                # milli-cents
+timeout_ms  = 30000
+
+[route.auth]
+kind = "bearer"
+env  = "FIRECRAWL_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","formats":["markdown"]}'''
+
+[route.parse]
+kind = "json_path"
+path = "$.data.markdown"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+```
+
+Five adapter kinds cover essentially every scraping vendor in the wild:
+
+- **`direct_http`** — plain GET/POST
+- **`http_json`** — POST JSON, parse JSON (Firecrawl, Zyte, Brightdata, Apify, Oxylabs)
+- **`http_jsonl_stream`** — POST JSON, parse streaming JSONL (Spider Cloud only)
+- **`chrome_cdp`** — WebSocket CDP (Browserless, Brightdata Scraping Browser, Spider Browser Cloud)
+- **`captcha_2captcha`** + **`browser_use`** — submit + poll protocols baked in
+
+## Three orchestration modes
+
+- **`ladder`** (default): cheapest first; escalate on failure (status, validation, network error). Stops at first valid response, budget ceiling, or `--max-retries`.
+- **`race`**: fire all selected routes in parallel; first valid response wins; rest cancelled via `CancelToken`.
+- **`hedge`**: primary at t=0, backups at t = i × `--hedge-delay-ms`. Adaptive delay shrinks when latency variance is bad. First valid wins.
+
+## Waterfall promotion (learned ordering)
+
+After enough samples for a `(route, domain)` pair, the orchestrator skips the ladder warmup and starts at the proven route directly. Score combines cost / latency (EMA) / reliability (success rate) / confidence (log sample count). Cheapest qualifier wins on ties. Configurable via `WaterfallConfig`. Bounded memory (default cap 1M entries) with automatic stale-entry eviction.
+
+## CAPTCHA chains
+
+`captcha.2captcha` is a route — call it like any other route, but it returns a captcha TOKEN instead of page HTML. Compose: scrape primary → detect challenge → call captcha route with `siteKey` + `captchaType` in `req.extra` → replay original URL with token embedded.
+
+## Per-request cost forwarding
+
+`ScrapeResponse.cost_actual_units` + `cost_actual_unit` carry the vendor's reported per-request cost (ZenRows `Zr-Cost` header, Spider Cloud JSONL `$.costs.total`, etc.). Static `cost_milli` is always present; actual is `Option` because not every vendor exposes it.
+
+## Force a single provider for testing
+
+`gottem fetch URL --routes <id> --mode race` runs only that route. Useful to verify one vendor works for one URL without the ladder.
+
+In the library: `Orchestrator::execute_once(&route, &req, 0, &cancel)` is the primitive — no ladder, no race, no waterfall promotion. Single attempt.
+
+## License
+
+Apache-2.0 OR MIT.
