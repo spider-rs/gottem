@@ -48,12 +48,18 @@ pub mod route;
 pub mod templating;
 pub mod tier;
 pub mod validator;
+pub mod waterfall;
 
 // Re-exports from spider so downstream crates only depend on gottem-core for the trait surface.
 pub use spider;
 pub use spider::configuration::RequestProxy;
 pub use spider::page::AntiBotTech;
 pub use spider::utils::hedge::{HedgeConfig, HedgeTracker};
+
+// Lock-free map re-exported so callers can iterate / extend waterfall stats without
+// taking their own dashmap dep.
+pub use dashmap;
+pub use dashmap::DashMap;
 
 pub use adapter::{Adapter, AdapterContext, AdapterRegistry};
 pub use budget::Budget;
@@ -74,3 +80,7 @@ pub use route::{
 };
 pub use tier::Tier;
 pub use validator::Validator;
+pub use waterfall::{
+    domain_key, domain_key_from_url, DomainKey, RouteDomainEntry, StatsSnapshot, WaterfallConfig,
+    WaterfallStats,
+};

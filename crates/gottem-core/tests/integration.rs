@@ -17,6 +17,7 @@ use gottem_core::{
     Adapter, AdapterContext, AdapterKind, AdapterRegistry, Budget, CancelToken, Capabilities,
     EndpointTemplate, FetchError, HedgeConfig, HttpMethod, LadderStrategy, Orchestrator, Route,
     RouteCatalog, RouteCatalogBuilder, ScrapeRequest, ScrapeResponse, Tier, Validator,
+    WaterfallConfig,
 };
 use url::Url;
 
@@ -259,6 +260,82 @@ async fn race_winner_cancels_losers() {
         resp.route_id.as_ref(),
         "local.http" | "cloud.cheap" | "cloud.smart"
     ));
+}
+
+#[tokio::test]
+async fn waterfall_promotes_proven_route_skipping_ladder_warmup() {
+    // Build an orchestrator with a low-threshold WaterfallConfig so we can prime it cheaply.
+    let catalog = Arc::new(
+        RouteCatalogBuilder::new()
+            .add(route("local.http", Tier::T0, 0))
+            .add(route("cloud.cheap", Tier::T4, 10))
+            .add(route("cloud.smart", Tier::T7, 100))
+            .build(),
+    );
+    let mock = MockAdapter::new();
+    let mut reg = AdapterRegistry::new();
+    reg.register(mock.clone() as Arc<dyn Adapter>);
+    let orch = Arc::new(
+        Orchestrator::new(
+            catalog.clone(),
+            Arc::new(reg),
+            Arc::new(Budget::new(10_000)),
+        )
+        .with_waterfall_config(WaterfallConfig {
+            promotion_threshold: 5,
+            min_success_rate: 0.80,
+            max_entries: 1000,
+        }),
+    );
+
+    // Prime stats: cloud.smart has been proven for example.test for 10 calls.
+    let proven_url = Url::parse("https://example.test/").unwrap();
+    let smart_id: gottem_core::RouteId = Arc::from("cloud.smart");
+    for _ in 0..10 {
+        orch.waterfall_stats()
+            .record_success(&smart_id, &proven_url);
+    }
+
+    // Make T0 succeed so that, WITHOUT promotion, the ladder would happily settle there.
+    // With promotion, the orchestrator must skip T0 and start at the proven cloud.smart.
+    let strategy = ladder(catalog.clone(), 3);
+    let req = ScrapeRequest::get(proven_url);
+    let resp = orch
+        .fetch_cheap(req, strategy, CancelToken::new())
+        .await
+        .expect("promoted fetch ok");
+    assert_eq!(
+        resp.tier,
+        Tier::T7,
+        "stats should have promoted cloud.smart past the T0 starting point"
+    );
+}
+
+#[tokio::test]
+async fn waterfall_no_promotion_when_unproven_falls_back_to_ladder() {
+    let catalog = Arc::new(
+        RouteCatalogBuilder::new()
+            .add(route("local.http", Tier::T0, 0))
+            .add(route("cloud.smart", Tier::T7, 100))
+            .build(),
+    );
+    let mock = MockAdapter::new();
+    let mut reg = AdapterRegistry::new();
+    reg.register(mock.clone() as Arc<dyn Adapter>);
+    let orch = Arc::new(Orchestrator::new(
+        catalog.clone(),
+        Arc::new(reg),
+        Arc::new(Budget::new(10_000)),
+    ));
+
+    // No stats primed; orchestrator should walk normally and land on T0 (which succeeds).
+    let strategy = ladder(catalog.clone(), 3);
+    let req = ScrapeRequest::get(Url::parse("https://fresh.test/").unwrap());
+    let resp = orch
+        .fetch_cheap(req, strategy, CancelToken::new())
+        .await
+        .expect("cold-start fetch ok");
+    assert_eq!(resp.tier, Tier::T0);
 }
 
 #[tokio::test]

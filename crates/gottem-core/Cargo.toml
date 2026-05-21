@@ -21,6 +21,7 @@ url          = { workspace = true }
 http         = { workspace = true }
 toml         = { workspace = true }
 once_cell    = { workspace = true }
+dashmap      = { workspace = true }
 spider       = { workspace = true }
 
 [features]

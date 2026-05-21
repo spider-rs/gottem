@@ -16,6 +16,7 @@ use crate::{
     response::ScrapeResponse,
     retry::{AttemptOutcome, RetryStrategy},
     route::{Route, RouteId},
+    waterfall::{WaterfallConfig, WaterfallStats},
 };
 
 pub use spider::utils::hedge::{HedgeConfig, HedgeTracker};
@@ -48,6 +49,7 @@ pub struct Orchestrator {
     breakers: HashMap<RouteId, Arc<CircuitBreaker>>,
     hedge_tracker: Arc<HedgeTracker>,
     budget: Arc<Budget>,
+    stats: Arc<WaterfallStats>,
 }
 
 impl Orchestrator {
@@ -75,6 +77,7 @@ impl Orchestrator {
             breakers,
             hedge_tracker: Arc::new(HedgeTracker::new(2.0, 8)),
             budget,
+            stats: Arc::new(WaterfallStats::default()),
         }
     }
 
@@ -141,10 +144,12 @@ impl Orchestrator {
             Ok(_) => {
                 breaker.record_success();
                 self.hedge_tracker.record_success();
+                self.stats.record_success(&route.id, &req.url);
             }
             Err(e) if e.is_retryable() => {
                 breaker.record_failure();
                 self.hedge_tracker.record_error();
+                self.stats.record_failure(&route.id, &req.url);
             }
             Err(_) => {}
         }
@@ -161,6 +166,12 @@ impl Orchestrator {
 
     /// Cheap mode: sequential ladder. The strategy's `initial()` provides the first route;
     /// subsequent retries escalate via `on_retry()` until success, exhaustion, or non-retryable error.
+    ///
+    /// **Promotion shortcut:** before consulting the strategy, the orchestrator checks
+    /// its [`WaterfallStats`] — if the request's URL has a domain with a route that's
+    /// met the promotion thresholds (default: 100 successes at ≥80% rate), the ladder
+    /// is skipped and that proven route runs first. The strategy still handles retries
+    /// on failure, so promotion is an *acceleration*, never a constraint.
     #[allow(unused_assignments)]
     pub async fn fetch_cheap(
         &self,
@@ -170,9 +181,12 @@ impl Orchestrator {
     ) -> Result<ScrapeResponse, FetchError> {
         let max_retries = strategy.max_retries();
 
-        let mut current_route = match strategy.initial() {
-            Some(r) => r,
-            None => return Err(FetchError::Exhausted),
+        let mut current_route = match self.stats.promoted_route(&req.url, &self.catalog) {
+            Some(promoted) => promoted,
+            None => match strategy.initial() {
+                Some(r) => r,
+                None => return Err(FetchError::Exhausted),
+            },
         };
 
         let mut attempt: u32 = 0;
