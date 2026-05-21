@@ -223,5 +223,8 @@ async fn body_preserves_original_content() {
         "body did not contain the original payload; got: {body_str}"
     );
     let content = resp.content.as_deref().expect("content present");
-    assert!(content.contains(needle), "content did not contain the original payload");
+    assert!(
+        content.contains(needle),
+        "content did not contain the original payload"
+    );
 }
