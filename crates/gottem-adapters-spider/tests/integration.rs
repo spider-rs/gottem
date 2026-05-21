@@ -34,6 +34,7 @@ fn route_for(server_url: &str) -> Route {
         timeout_ms: 5_000,
         concurrency: 4,
         retry_on: Default::default(),
+        cost_extract: None,
     }
 }
 

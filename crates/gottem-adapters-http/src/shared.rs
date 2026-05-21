@@ -4,10 +4,18 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use gottem_core::{
-    templating, AuthSpec, BodyTemplate, CancelToken, FetchError, HttpMethod, ResponseParse,
-    ScrapeRequest,
+    templating, AuthSpec, BodyTemplate, CancelToken, CostExtract, FetchError, HttpMethod,
+    ResponseParse, ScrapeRequest,
 };
 use reqwest::{Client, Method, RequestBuilder};
+
+/// Full outcome of an HTTP send: status, raw headers (lowercased keys), body.
+/// Replaces the older `(u16, Bytes)` tuple so cost-extraction adapters can read headers.
+pub struct HttpOutcome {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Bytes,
+}
 
 /// Default shared `reqwest::Client`. Connection pooling makes one client across all three
 /// HTTP adapters far more efficient than spinning a new one per request.
@@ -136,19 +144,104 @@ pub fn parse_content(parse: &ResponseParse, body: &[u8]) -> Result<Option<String
 pub async fn send_with_cancel(
     builder: RequestBuilder,
     cancel: &CancelToken,
-) -> Result<(u16, Bytes), FetchError> {
+) -> Result<HttpOutcome, FetchError> {
     let response = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Err(FetchError::Cancelled),
         r = builder.send() => r.map_err(classify_reqwest_err)?,
     };
     let status = response.status().as_u16();
+    // Capture headers BEFORE consuming the body — needed for cost extraction (Zr-Cost,
+    // Spb-Cost, etc.). Lowercase the keys so case-insensitive matching is trivial.
+    let headers: Vec<(String, String)> = response
+        .headers()
+        .iter()
+        .filter_map(|(k, v)| {
+            v.to_str()
+                .ok()
+                .map(|s| (k.as_str().to_ascii_lowercase(), s.to_string()))
+        })
+        .collect();
     let body = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Err(FetchError::Cancelled),
         r = response.bytes() => r.map_err(classify_reqwest_err)?,
     };
-    Ok((status, body))
+    Ok(HttpOutcome {
+        status,
+        headers,
+        body,
+    })
+}
+
+/// Extract per-request cost from the vendor's response per the route's [`CostExtract`]
+/// spec. Returns `(value, unit_label)` on success; `None` when the spec is absent or the
+/// vendor didn't include the expected field this time. Never panics, never errors —
+/// missing cost data is normal and shouldn't block a successful response.
+pub fn extract_cost(
+    spec: Option<&CostExtract>,
+    headers: &[(String, String)],
+    body: &[u8],
+) -> Option<(f64, String)> {
+    let spec = spec?;
+    match spec {
+        CostExtract::Header {
+            name,
+            unit,
+            multiplier,
+        } => {
+            let target = name.to_ascii_lowercase();
+            for (k, v) in headers {
+                if k == &target {
+                    return v
+                        .trim()
+                        .parse::<f64>()
+                        .ok()
+                        .map(|n| (n * multiplier, unit.clone()));
+                }
+            }
+            None
+        }
+        CostExtract::JsonPath {
+            path,
+            unit,
+            multiplier,
+        } => {
+            let v: serde_json::Value = serde_json::from_slice(body).ok()?;
+            extract_f64_at_path(&v, path).map(|n| (n * multiplier, unit.clone()))
+        }
+        CostExtract::JsonlFirst {
+            path,
+            unit,
+            multiplier,
+        } => {
+            for line in body.split(|&b| b == b'\n') {
+                let trimmed = trim_ws(line);
+                if trimmed.is_empty() || !matches!(trimmed[0], b'{' | b'[') {
+                    continue;
+                }
+                if let Ok(parsed) = serde_json::from_slice::<serde_json::Value>(trimmed) {
+                    let target = match &parsed {
+                        serde_json::Value::Array(arr) => {
+                            arr.first().cloned().unwrap_or(serde_json::Value::Null)
+                        }
+                        _ => parsed,
+                    };
+                    return extract_f64_at_path(&target, path)
+                        .map(|n| (n * multiplier, unit.clone()));
+                }
+            }
+            None
+        }
+    }
+}
+
+fn extract_f64_at_path(v: &serde_json::Value, path: &str) -> Option<f64> {
+    let ptr = dotted_to_pointer(path);
+    let target = if ptr.is_empty() { v } else { v.pointer(&ptr)? };
+    target
+        .as_f64()
+        .or_else(|| target.as_str().and_then(|s| s.parse::<f64>().ok()))
 }
 
 /// Map a `reqwest::Error` into a gottem [`FetchError`] preserving timeout/network semantics.

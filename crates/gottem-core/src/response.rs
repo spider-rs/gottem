@@ -16,8 +16,17 @@ pub struct ScrapeResponse {
     pub content: Option<String>,
     pub route_id: RouteId,
     pub tier: Tier,
-    /// Cost charged for this response in milli-cents (10 = $0.001).
+    /// Static cost from the route (milli-cents — 10 = $0.001). Always present.
+    /// Reflects the *expected* cost, not what the vendor actually billed.
     pub cost_milli: u64,
+    /// Per-request cost reported by the vendor itself, extracted per the route's
+    /// `cost_extract` spec. `None` when the route doesn't declare extraction or the
+    /// vendor didn't include the field in this response. Raw numeric value — unit is
+    /// in [`cost_actual_unit`](Self::cost_actual_unit).
+    pub cost_actual_units: Option<f64>,
+    /// Unit label for [`cost_actual_units`](Self::cost_actual_units) — "credits",
+    /// "milli_cents", "dollars", etc. Same lifetime as the field above.
+    pub cost_actual_unit: Option<String>,
     pub elapsed: Duration,
     pub attempt: u32,
     pub metadata: HashMap<String, serde_json::Value>,

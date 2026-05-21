@@ -30,6 +30,14 @@ template = '''{"source":"universal","url":"{{url}}","render":"html"}'''
 kind = "json_path"
 path = "$.results[0].content"
 
+[route.cost_extract]
+# Forward Oxylabs' reported cost as-is. The vendor returns dollars per request; we don't
+# convert into milli-cents because rates fluctuate per plan/usage tier and any cached
+# multiplier would lie. Consumers normalize on their side if needed.
+kind = "json_path"
+path = "$.results[0].cost"
+unit = "dollars"
+
 [[route.validate]]
 kind = "min_bytes"
 n    = 500

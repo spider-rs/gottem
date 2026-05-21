@@ -483,6 +483,7 @@ mod tests {
             timeout_ms: 5_000,
             concurrency: 8,
             retry_on: Default::default(),
+            cost_extract: None,
         }
     }
 

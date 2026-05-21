@@ -34,6 +34,7 @@ fn captcha_route() -> Route {
         timeout_ms: 120_000,
         concurrency: 4,
         retry_on: Default::default(),
+        cost_extract: None,
     }
 }
 

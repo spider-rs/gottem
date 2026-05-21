@@ -107,6 +107,8 @@ impl Adapter for MockAdapter {
             route_id: route.id.clone(),
             tier: route.tier,
             cost_milli: route.cost,
+            cost_actual_units: None,
+            cost_actual_unit: None,
             elapsed: std::time::Duration::ZERO,
             attempt: 0,
             metadata: Default::default(),
@@ -132,6 +134,7 @@ fn route(id: &str, tier: Tier, cost: u64) -> Route {
         timeout_ms: 5_000,
         concurrency: 8,
         retry_on: Default::default(),
+        cost_extract: None,
     }
 }
 

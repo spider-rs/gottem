@@ -33,6 +33,7 @@ fn base_route(server: &MockServer, adapter: AdapterKind, parse: ResponseParse) -
         timeout_ms: 5_000,
         concurrency: 4,
         retry_on: Default::default(),
+        cost_extract: None,
     }
 }
 

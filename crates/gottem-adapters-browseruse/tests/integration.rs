@@ -35,6 +35,7 @@ fn browseruse_route() -> Route {
         timeout_ms: 600_000,
         concurrency: 2,
         retry_on: Default::default(),
+        cost_extract: None,
     }
 }
 

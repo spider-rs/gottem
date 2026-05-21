@@ -37,7 +37,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use gottem_core::{
     Adapter, AdapterContext, AdapterKind, AdapterRegistry, CancelToken, FetchError, Route,
     ScrapeRequest, ScrapeResponse,
@@ -47,7 +46,10 @@ use reqwest::Client;
 mod shared;
 pub use shared::build_default_client;
 
-use shared::{apply_auth, parse_content, render_body, send_with_cancel, to_reqwest_method};
+use shared::{
+    apply_auth, extract_cost, parse_content, render_body, send_with_cancel, to_reqwest_method,
+    HttpOutcome,
+};
 
 /// Register all three HTTP adapters into a [`AdapterRegistry`], sharing one
 /// `reqwest::Client` across them for connection pooling. Pass `None` to use the default
@@ -107,12 +109,12 @@ impl Adapter for DirectHttpAdapter {
             builder = builder.body(body);
         }
 
-        let (status, body) = send_with_cancel(builder, cancel).await?;
-        if status >= 400 {
-            return Err(FetchError::Status(status));
+        let outcome = send_with_cancel(builder, cancel).await?;
+        if outcome.status >= 400 {
+            return Err(FetchError::Status(outcome.status));
         }
-        let content = parse_content(&route.parse, &body)?;
-        Ok(response_from(route, req, ctx, status, body, content))
+        let content = parse_content(&route.parse, &outcome.body)?;
+        Ok(response_from(route, req, ctx, outcome, content))
     }
 }
 
@@ -166,12 +168,12 @@ impl Adapter for HttpJsonAdapter {
             builder = builder.body(body);
         }
 
-        let (status, body) = send_with_cancel(builder, cancel).await?;
-        if status >= 400 {
-            return Err(FetchError::Status(status));
+        let outcome = send_with_cancel(builder, cancel).await?;
+        if outcome.status >= 400 {
+            return Err(FetchError::Status(outcome.status));
         }
-        let content = parse_content(&route.parse, &body)?;
-        Ok(response_from(route, req, ctx, status, body, content))
+        let content = parse_content(&route.parse, &outcome.body)?;
+        Ok(response_from(route, req, ctx, outcome, content))
     }
 }
 
@@ -228,18 +230,20 @@ impl Adapter for HttpJsonlStreamAdapter {
             builder = builder.body(body);
         }
 
-        let (status, body) = send_with_cancel(builder, cancel).await?;
-        if status >= 400 {
-            return Err(FetchError::Status(status));
+        let outcome = send_with_cancel(builder, cancel).await?;
+        if outcome.status >= 400 {
+            return Err(FetchError::Status(outcome.status));
         }
         // Force jsonl_first parse semantics regardless of what the route says. If the route
         // declared something else, fall back to that — but the canonical case for this adapter
         // is JsonlFirst.
         let content = match &route.parse {
-            gottem_core::ResponseParse::JsonlFirst { .. } => parse_content(&route.parse, &body)?,
-            other => parse_content(other, &body)?,
+            gottem_core::ResponseParse::JsonlFirst { .. } => {
+                parse_content(&route.parse, &outcome.body)?
+            }
+            other => parse_content(other, &outcome.body)?,
         };
-        Ok(response_from(route, req, ctx, status, body, content))
+        Ok(response_from(route, req, ctx, outcome, content))
     }
 }
 
@@ -247,19 +251,28 @@ fn response_from(
     route: &Route,
     req: &ScrapeRequest,
     ctx: &AdapterContext,
-    status: u16,
-    body: Bytes,
+    outcome: HttpOutcome,
     content: Option<String>,
 ) -> ScrapeResponse {
+    // Try to read per-request cost from the vendor's response per the route's spec.
+    // Missing data (header absent, JSON path miss, malformed) is normal — fall through
+    // to None.
+    let (actual_units, actual_unit) =
+        match extract_cost(route.cost_extract.as_ref(), &outcome.headers, &outcome.body) {
+            Some((n, u)) => (Some(n), Some(u)),
+            None => (None, None),
+        };
     ScrapeResponse {
         url: req.url.clone(),
-        status,
-        headers: vec![],
-        body,
+        status: outcome.status,
+        headers: outcome.headers,
+        body: outcome.body,
         content,
         route_id: route.id.clone(),
         tier: route.tier,
         cost_milli: route.cost,
+        cost_actual_units: actual_units,
+        cost_actual_unit: actual_unit,
         elapsed: ctx.elapsed(),
         attempt: ctx.attempt,
         metadata: Default::default(),

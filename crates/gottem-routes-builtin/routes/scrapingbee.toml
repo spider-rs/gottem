@@ -20,6 +20,11 @@ concurrency = 20
 [route.parse]
 kind = "raw_text"
 
+[route.cost_extract]
+kind = "header"
+name = "Spb-Cost"
+unit = "credits"
+
 [[route.validate]]
 kind = "min_bytes"
 n    = 500
@@ -39,6 +44,11 @@ concurrency = 10
 
 [route.parse]
 kind = "raw_text"
+
+[route.cost_extract]
+kind = "header"
+name = "Spb-Cost"
+unit = "credits"
 
 [[route.validate]]
 kind = "min_bytes"
@@ -62,6 +72,11 @@ concurrency = 8
 
 [route.parse]
 kind = "raw_text"
+
+[route.cost_extract]
+kind = "header"
+name = "Spb-Cost"
+unit = "credits"
 
 [[route.validate]]
 kind = "min_bytes"

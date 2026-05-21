@@ -65,6 +65,13 @@ pub struct Route {
 
     #[serde(default)]
     pub retry_on: RetryClassifier,
+
+    /// Optional per-request cost extraction. When set, the adapter reads the upstream's
+    /// reported cost from a response header or JSON field and populates
+    /// [`ScrapeResponse::cost_actual_units`](crate::response::ScrapeResponse::cost_actual_units).
+    /// Unset routes use the static `cost` field as the only signal.
+    #[serde(default)]
+    pub cost_extract: Option<CostExtract>,
 }
 
 fn default_method() -> HttpMethod {
@@ -263,6 +270,59 @@ pub enum ResponseParse {
     Markdown,
     /// Body is HTML — pass through.
     Html,
+}
+
+/// Specification for extracting per-request cost from the vendor's response.
+///
+/// Each variant carries an optional `multiplier` (default 1.0) applied to the raw extracted
+/// value before it's returned. Use this to normalize known conversions into a common unit:
+///
+/// - **Spider Cloud** — `jsonl_first { path = "$.costs.total", unit = "milli_cents",
+///   multiplier = 1.0 }` (10,000 credits = $1 = 10,000 milli-cents, so 1:1)
+/// - **Oxylabs** — `json_path { path = "$.results[0].cost", unit = "milli_cents",
+///   multiplier = 10000.0 }` (response is in dollars)
+/// - **ZenRows** — `header { name = "Zr-Cost", unit = "credits" }` (plan-dependent, can't
+///   normalize without knowing the user's plan)
+/// - **ScrapingBee** — `header { name = "Spb-Cost", unit = "credits" }` (same)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CostExtract {
+    /// Read a numeric response header (e.g. ZenRows' `Zr-Cost`).
+    Header {
+        name: String,
+        /// Unit label surfaced on the response after the multiplier is applied.
+        #[serde(default = "default_unit")]
+        unit: String,
+        /// Scalar applied to the raw extracted value before reporting. Use 1.0 for "raw
+        /// passthrough" (most credit-denominated vendors), or e.g. 10000.0 to convert
+        /// dollars to milli-cents.
+        #[serde(default = "default_multiplier")]
+        multiplier: f64,
+    },
+    /// Read a numeric field from the parsed JSON body via dotted-path.
+    JsonPath {
+        path: String,
+        #[serde(default = "default_unit")]
+        unit: String,
+        #[serde(default = "default_multiplier")]
+        multiplier: f64,
+    },
+    /// Read a numeric field from the first JSONL record (Spider Cloud).
+    JsonlFirst {
+        path: String,
+        #[serde(default = "default_unit")]
+        unit: String,
+        #[serde(default = "default_multiplier")]
+        multiplier: f64,
+    },
+}
+
+fn default_unit() -> String {
+    "units".into()
+}
+
+fn default_multiplier() -> f64 {
+    1.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

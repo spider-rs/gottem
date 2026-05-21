@@ -131,6 +131,8 @@ impl Adapter for SpiderAdapter {
             route_id: route.id.clone(),
             tier: route.tier,
             cost_milli: route.cost,
+            cost_actual_units: None,
+            cost_actual_unit: None,
             elapsed: ctx.elapsed(),
             attempt: ctx.attempt,
             metadata: Default::default(),

@@ -33,6 +33,14 @@ template = '''{"url":"{{url}}","request":"http","readability":true,"return_forma
 kind = "jsonl_first"
 path = "$.content"
 
+[route.cost_extract]
+# Forward Spider Cloud credits raw — the dollar conversion is plan-dependent (volume
+# discounts, prepaid balances, etc.), so we don't try to normalize. Consumers who know
+# their plan can multiply against their own credit-to-dollar rate.
+kind = "jsonl_first"
+path = "$.costs.total"
+unit = "credits"
+
 [[route.validate]]
 kind = "min_bytes"
 n    = 500
@@ -62,6 +70,14 @@ template = '''{"url":"{{url}}","request":"chrome","readability":true,"return_for
 [route.parse]
 kind = "jsonl_first"
 path = "$.content"
+
+[route.cost_extract]
+# Forward Spider Cloud credits raw — the dollar conversion is plan-dependent (volume
+# discounts, prepaid balances, etc.), so we don't try to normalize. Consumers who know
+# their plan can multiply against their own credit-to-dollar rate.
+kind = "jsonl_first"
+path = "$.costs.total"
+unit = "credits"
 
 [[route.validate]]
 kind = "min_bytes"
@@ -95,6 +111,14 @@ template = '''{"url":"{{url}}","request":"chrome","proxy":"residential","readabi
 [route.parse]
 kind = "jsonl_first"
 path = "$.content"
+
+[route.cost_extract]
+# Forward Spider Cloud credits raw — the dollar conversion is plan-dependent (volume
+# discounts, prepaid balances, etc.), so we don't try to normalize. Consumers who know
+# their plan can multiply against their own credit-to-dollar rate.
+kind = "jsonl_first"
+path = "$.costs.total"
+unit = "credits"
 
 [[route.validate]]
 kind = "min_bytes"
@@ -130,6 +154,14 @@ template = '''{"url":"{{url}}","request":"smart","readability":true,"return_form
 [route.parse]
 kind = "jsonl_first"
 path = "$.content"
+
+[route.cost_extract]
+# Forward Spider Cloud credits raw — the dollar conversion is plan-dependent (volume
+# discounts, prepaid balances, etc.), so we don't try to normalize. Consumers who know
+# their plan can multiply against their own credit-to-dollar rate.
+kind = "jsonl_first"
+path = "$.costs.total"
+unit = "credits"
 
 [[route.validate]]
 kind = "min_bytes"
