@@ -21,17 +21,29 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # fmt: cheap, runs first, fails fast on style.
+  # fmt: cheap style check. `cargo fmt --all` invokes `cargo metadata` to walk
+  # workspace members, and that fails without the spider sibling — so we check
+  # spider out alongside, same as build+test below.
   # ---------------------------------------------------------------------------
   fmt:
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout spider (path dep — needed for cargo metadata)
+        uses: actions/checkout@v4
+        with:
+          repository: spider-rs/spider
+          path: spider
+      - name: Checkout gottem
+        uses: actions/checkout@v4
+        with:
+          path: gottem
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - run: cargo fmt --all -- --check
+      - name: cargo fmt --check
+        working-directory: gottem
+        run: cargo fmt --all -- --check
 
   # ---------------------------------------------------------------------------
   # build + test: real build with spider checked out as a sibling.
