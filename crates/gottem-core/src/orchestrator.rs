@@ -93,6 +93,23 @@ impl Orchestrator {
     pub fn hedge_tracker(&self) -> &HedgeTracker {
         &self.hedge_tracker
     }
+    pub fn waterfall_stats(&self) -> &Arc<WaterfallStats> {
+        &self.stats
+    }
+
+    /// Replace the default [`WaterfallStats`] (uses [`WaterfallConfig::default`]) with a
+    /// custom-configured one. Useful for tuning the promotion threshold or memory cap.
+    pub fn with_waterfall_config(mut self, cfg: WaterfallConfig) -> Self {
+        self.stats = Arc::new(WaterfallStats::new(cfg));
+        self
+    }
+
+    /// Plug in an externally-owned stats instance — handy for sharing one stats store
+    /// across multiple Orchestrators (e.g. per-tenant orchestrators in a server).
+    pub fn with_waterfall_stats(mut self, stats: Arc<WaterfallStats>) -> Self {
+        self.stats = stats;
+        self
+    }
 
     /// Single-attempt dispatch through a specific route. Enforces budget, circuit breaker,
     /// per-route concurrency limit, and propagates cancellation via `tokio::select!`.
