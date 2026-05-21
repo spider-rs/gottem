@@ -161,7 +161,8 @@ impl Orchestrator {
             Ok(_) => {
                 breaker.record_success();
                 self.hedge_tracker.record_success();
-                self.stats.record_success(&route.id, &req.url);
+                self.stats
+                    .record_success(&route.id, &req.url, elapsed.as_millis() as u64);
             }
             Err(e) if e.is_retryable() => {
                 breaker.record_failure();

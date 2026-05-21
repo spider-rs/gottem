@@ -136,6 +136,13 @@ impl Captcha2CaptchaAdapter {
     pub fn arc() -> Arc<dyn Adapter> {
         Arc::new(Self::new())
     }
+
+    /// Build an [`Arc<dyn Adapter>`] sharing an externally-owned `reqwest::Client`.
+    /// Use this when registering alongside other HTTP-based adapters so a single
+    /// connection pool serves the whole stack (http + captcha + browseruse).
+    pub fn arc_with_client(client: Client) -> Arc<dyn Adapter> {
+        Arc::new(Self::with_client(client))
+    }
 }
 
 #[async_trait]

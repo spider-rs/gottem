@@ -285,6 +285,7 @@ async fn waterfall_promotes_proven_route_skipping_ladder_warmup() {
             promotion_threshold: 5,
             min_success_rate: 0.80,
             max_entries: 1000,
+            ..Default::default()
         }),
     );
 
@@ -293,7 +294,7 @@ async fn waterfall_promotes_proven_route_skipping_ladder_warmup() {
     let smart_id: gottem_core::RouteId = Arc::from("cloud.smart");
     for _ in 0..10 {
         orch.waterfall_stats()
-            .record_success(&smart_id, &proven_url);
+            .record_success(&smart_id, &proven_url, 200);
     }
 
     // Make T0 succeed so that, WITHOUT promotion, the ladder would happily settle there.

@@ -195,13 +195,25 @@ fn build_setup(config_path: Option<&std::path::Path>) -> Result<Setup> {
     }
     let catalog = Arc::new(builder.build());
 
+    // One shared reqwest::Client across every HTTP-flavored adapter — one connection
+    // pool, one DNS cache, one TLS session cache for the whole gottem stack. Spider
+    // and Chrome have their own underlying clients (spider::Website + chromiumoxide),
+    // which is unavoidable; everything else shares this pool.
+    let shared_http_client = gottem_adapters_http::build_default_client();
+
     let mut registry = AdapterRegistry::new();
-    gottem_adapters_http::register_all(&mut registry, None);
+    gottem_adapters_http::register_all(&mut registry, Some(shared_http_client.clone()));
     registry.register(gottem_adapters_spider::SpiderAdapter::arc());
     #[cfg(feature = "chrome")]
     registry.register(gottem_adapters_chrome::ChromeCdpAdapter::arc());
-    registry.register(gottem_adapters_captcha::Captcha2CaptchaAdapter::arc());
-    registry.register(gottem_adapters_browseruse::BrowserUseAdapter::arc());
+    registry.register(
+        gottem_adapters_captcha::Captcha2CaptchaAdapter::arc_with_client(
+            shared_http_client.clone(),
+        ),
+    );
+    registry.register(
+        gottem_adapters_browseruse::BrowserUseAdapter::arc_with_client(shared_http_client),
+    );
 
     Ok(Setup {
         catalog,

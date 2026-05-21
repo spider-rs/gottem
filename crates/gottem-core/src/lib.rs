@@ -81,6 +81,6 @@ pub use route::{
 pub use tier::Tier;
 pub use validator::Validator;
 pub use waterfall::{
-    domain_key, domain_key_from_url, DomainKey, RouteDomainEntry, StatsSnapshot, WaterfallConfig,
-    WaterfallStats,
+    domain_key, domain_key_from_url, DomainKey, RouteDomainEntry, ScoreWeights, StatsSnapshot,
+    WaterfallConfig, WaterfallStats,
 };
