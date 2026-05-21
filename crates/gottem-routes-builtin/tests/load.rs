@@ -162,6 +162,12 @@ fn register_all_succeeds_with_default_features() {
     if cfg!(feature = "two-captcha") {
         expected += 1;
     }
+    if cfg!(feature = "browserbase") {
+        expected += 1;
+    }
+    if cfg!(feature = "browser-use") {
+        expected += 1;
+    }
 
     assert_eq!(catalog.len(), expected, "route count mismatch");
 }

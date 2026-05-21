@@ -1,0 +1,25 @@
+# Browserbase — remote headless Chrome via CDP, apiKey + projectId in URL query.
+#
+# Env vars: BROWSERBASE_API_KEY + BROWSERBASE_PROJECT_ID
+# Endpoint: wss://connect.browserbase.com?apiKey=...&projectId=...
+# Docs:    https://docs.browserbase.com/
+
+[[route]]
+id          = "browserbase.cdp"
+adapter     = "chrome_cdp"
+endpoint    = "wss://connect.browserbase.com?apiKey={{env:BROWSERBASE_API_KEY}}&projectId={{env:BROWSERBASE_PROJECT_ID}}&enableProxy=true"
+method      = "GET"
+tier        = 9
+cost        = 200               # $0.02/page baseline (plan-dependent)
+timeout_ms  = 120000
+concurrency = 4
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+stealth     = true
+fingerprint = true

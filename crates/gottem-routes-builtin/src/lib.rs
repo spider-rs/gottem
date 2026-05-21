@@ -94,6 +94,14 @@ pub fn register_all(builder: RouteCatalogBuilder) -> Result<RouteCatalogBuilder,
     {
         b = add_two_captcha(b)?;
     }
+    #[cfg(feature = "browserbase")]
+    {
+        b = add_browserbase(b)?;
+    }
+    #[cfg(feature = "browser-use")]
+    {
+        b = add_browser_use(b)?;
+    }
     Ok(b)
 }
 
@@ -183,6 +191,22 @@ pub fn add_two_captcha(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, Fe
     b.add_toml(include_str!("../routes/two_captcha.toml"))
 }
 
+/// Browserbase — CDP via WebSocket, apiKey + projectId in URL template. One route at T9.
+/// Requires env vars `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID`.
+#[cfg(feature = "browserbase")]
+pub fn add_browserbase(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
+    b.add_toml(include_str!("../routes/browserbase.toml"))
+}
+
+/// Browser Use Cloud — AI agent that runs a natural-language browser task.
+/// Async-only: submits to `/api/v1/run-task` and returns the task ID. Callers poll
+/// `/api/v1/task/{id}` for the final output until a polling adapter ships.
+/// Requires env var `BROWSER_USE_API_KEY`.
+#[cfg(feature = "browser-use")]
+pub fn add_browser_use(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
+    b.add_toml(include_str!("../routes/browser_use.toml"))
+}
+
 /// Raw access to the embedded TOML strings. Useful for displaying the shipped catalog
 /// in CLI output (e.g. `gottem routes show <vendor>`) or for tests.
 pub mod embedded {
@@ -210,4 +234,8 @@ pub mod embedded {
     pub const OXYLABS: &str = include_str!("../routes/oxylabs.toml");
     #[cfg(feature = "two-captcha")]
     pub const TWO_CAPTCHA: &str = include_str!("../routes/two_captcha.toml");
+    #[cfg(feature = "browserbase")]
+    pub const BROWSERBASE: &str = include_str!("../routes/browserbase.toml");
+    #[cfg(feature = "browser-use")]
+    pub const BROWSER_USE: &str = include_str!("../routes/browser_use.toml");
 }
