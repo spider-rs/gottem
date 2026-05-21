@@ -1,0 +1,32 @@
+# Brightdata Scraping Browser — remote headless Chrome via CDP/WebSocket.
+#
+# Env var: BRIGHTDATA_BROWSER  (format: `brd-customer-CUSTOMER_ID-zone-ZONE_NAME:PASSWORD`)
+# Endpoint: wss://brd.superproxy.io:9222
+# Docs:    https://docs.brightdata.com/scraping-automation/scraping-browser/quickstart
+#
+# Auth is via WebSocket URL userinfo. The adapter splits the env value on `:` to populate
+# user + password fields of the WS URL.
+
+[[route]]
+id          = "brightdata.scraping_browser"
+adapter     = "chrome_cdp"
+endpoint    = "wss://brd.superproxy.io:9222"
+method      = "GET"
+tier        = 8
+cost        = 150               # $0.015/page
+timeout_ms  = 90000
+concurrency = 5
+
+[route.auth]
+kind = "ws_userinfo"
+env  = "BRIGHTDATA_BROWSER"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+stealth     = true
+fingerprint = true

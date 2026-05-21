@@ -1,0 +1,37 @@
+# Brightdata Web Unlocker route — JSON API, Bearer auth.
+#
+# Env var: BRIGHTDATA_TOKEN
+# Endpoint: https://api.brightdata.com/request
+# Docs:     https://docs.brightdata.com/scraping-automation/web-unlocker/quickstart
+#
+# Returns raw HTML (or whatever the upstream serves), not JSON. Parse as raw_text.
+
+[[route]]
+id          = "brightdata.unlocker"
+adapter     = "http_json"
+endpoint    = "https://api.brightdata.com/request"
+method      = "POST"
+tier        = 7
+cost        = 100               # $0.01/page baseline (varies by plan)
+timeout_ms  = 60000
+concurrency = 10
+
+[route.auth]
+kind = "bearer"
+env  = "BRIGHTDATA_TOKEN"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","zone":"web_unlocker","format":"raw"}'''
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+stealth     = true

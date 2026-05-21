@@ -1,0 +1,66 @@
+# Firecrawl routes — JSON API, Bearer auth.
+#
+# Env var: FIRECRAWL_API_KEY
+# Endpoint: https://api.firecrawl.dev/v1/scrape
+# Docs:     https://docs.firecrawl.dev/api-reference/endpoint/scrape
+
+# ----------------------------------------------------------------------------
+# T4 — Basic scrape, no JS render.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "firecrawl.scrape"
+adapter     = "http_json"
+endpoint    = "https://api.firecrawl.dev/v1/scrape"
+method      = "POST"
+tier        = 4
+cost        = 10
+timeout_ms  = 30000
+concurrency = 20
+
+[route.auth]
+kind = "bearer"
+env  = "FIRECRAWL_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","formats":["markdown"]}'''
+
+[route.parse]
+kind = "json_path"
+path = "$.data.markdown"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+# ----------------------------------------------------------------------------
+# T5 — With JS render. Adds waitFor for client-rendered content.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "firecrawl.scrape.js"
+adapter     = "http_json"
+endpoint    = "https://api.firecrawl.dev/v1/scrape"
+method      = "POST"
+tier        = 5
+cost        = 50
+timeout_ms  = 60000
+concurrency = 10
+
+[route.auth]
+kind = "bearer"
+env  = "FIRECRAWL_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","formats":["markdown"],"waitFor":2000}'''
+
+[route.parse]
+kind = "json_path"
+path = "$.data.markdown"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js = true

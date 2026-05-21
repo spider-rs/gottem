@@ -1,0 +1,23 @@
+# Browserless — remote headless Chrome via CDP/WebSocket, token in query string.
+#
+# Env var: BROWSERLESS_TOKEN
+# Endpoint: wss://chrome.browserless.io?token=...
+# Docs:    https://docs.browserless.io/
+
+[[route]]
+id          = "browserless.cdp"
+adapter     = "chrome_cdp"
+endpoint    = "wss://chrome.browserless.io?token={{env:BROWSERLESS_TOKEN}}"
+method      = "GET"
+tier        = 8
+cost        = 100               # $0.01/page baseline
+timeout_ms  = 90000
+concurrency = 5
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js      = true
+stealth = true

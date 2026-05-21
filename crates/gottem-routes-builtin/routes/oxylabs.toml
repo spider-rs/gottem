@@ -1,0 +1,40 @@
+# Oxylabs Web Scraper API — JSON, HTTP Basic auth.
+#
+# Env vars: OXYLABS_USER + OXYLABS_PASS
+# Endpoint: https://realtime.oxylabs.io/v1/queries
+# Docs:    https://developers.oxylabs.io/scraper-apis/web-scraper-api
+#
+# `source = "universal"` is the generic web scraper. `render = "html"` enables browser
+# rendering. Response shape: { "results": [ { "content": "<html>...</html>", ... } ] }
+
+[[route]]
+id          = "oxylabs.scraper"
+adapter     = "http_json"
+endpoint    = "https://realtime.oxylabs.io/v1/queries"
+method      = "POST"
+tier        = 9
+cost        = 500               # $0.05/page baseline (plan-dependent)
+timeout_ms  = 120000
+concurrency = 5
+
+[route.auth]
+kind     = "basic"
+user_env = "OXYLABS_USER"
+pass_env = "OXYLABS_PASS"
+
+[route.body]
+kind     = "json"
+template = '''{"source":"universal","url":"{{url}}","render":"html"}'''
+
+[route.parse]
+kind = "json_path"
+path = "$.results[0].content"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+stealth     = true

@@ -1,0 +1,72 @@
+# ScrapingBee routes — GET requests with api_key + url in query string.
+#
+# Env var: SCRAPINGBEE_API_KEY
+# Endpoint: https://app.scrapingbee.com/api/v1/
+# Docs:     https://www.scrapingbee.com/documentation/
+
+# ----------------------------------------------------------------------------
+# T4 — Basic HTTP, no JS.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "scrapingbee.basic"
+adapter     = "direct_http"
+endpoint    = "https://app.scrapingbee.com/api/v1/?api_key={{env:SCRAPINGBEE_API_KEY}}&url={{url}}&render_js=false"
+method      = "GET"
+tier        = 4
+cost        = 10
+timeout_ms  = 30000
+concurrency = 20
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+# ----------------------------------------------------------------------------
+# T5 — JS render via Chrome.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "scrapingbee.js"
+adapter     = "direct_http"
+endpoint    = "https://app.scrapingbee.com/api/v1/?api_key={{env:SCRAPINGBEE_API_KEY}}&url={{url}}&render_js=true"
+method      = "GET"
+tier        = 5
+cost        = 50
+timeout_ms  = 60000
+concurrency = 10
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js = true
+
+# ----------------------------------------------------------------------------
+# T6 — JS render + premium (residential) proxy.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "scrapingbee.premium"
+adapter     = "direct_http"
+endpoint    = "https://app.scrapingbee.com/api/v1/?api_key={{env:SCRAPINGBEE_API_KEY}}&url={{url}}&render_js=true&premium_proxy=true"
+method      = "GET"
+tier        = 6
+cost        = 75
+timeout_ms  = 60000
+concurrency = 8
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true

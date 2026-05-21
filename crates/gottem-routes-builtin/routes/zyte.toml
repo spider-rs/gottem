@@ -1,0 +1,38 @@
+# Zyte API route — JSON API, HTTP Basic auth (API key as user, no password).
+#
+# Env var: ZYTE_API_KEY
+# Endpoint: https://api.zyte.com/v1/extract
+# Docs:     https://docs.zyte.com/zyte-api/quickstart.html
+#
+# Auth quirk: Zyte uses Basic auth where the API key is the username and the password
+# is empty. The `basic` AuthSpec with `user_env` and no `pass_env` handles this.
+
+[[route]]
+id          = "zyte.api"
+adapter     = "http_json"
+endpoint    = "https://api.zyte.com/v1/extract"
+method      = "POST"
+tier        = 7
+cost        = 80
+timeout_ms  = 60000
+concurrency = 10
+
+[route.auth]
+kind     = "basic"
+user_env = "ZYTE_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","browserHtml":true}'''
+
+[route.parse]
+kind = "json_path"
+path = "$.browserHtml"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js      = true
+stealth = true

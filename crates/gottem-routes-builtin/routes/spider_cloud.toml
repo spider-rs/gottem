@@ -1,0 +1,137 @@
+# Spider Cloud routes — JSONL streaming, Bearer auth.
+#
+# Env var: SPIDER_CLOUD_API_KEY
+# Endpoint: https://api.spider.cloud/scrape
+# Docs:     https://spider.cloud/docs/api
+#
+# IMPORTANT: Spider Cloud streams chunked JSONL. The HttpJsonlStream adapter handles this;
+# do NOT route Spider Cloud through HttpJson — `.json()` on its response hangs.
+
+# ----------------------------------------------------------------------------
+# T4 — HTTP request mode. Cheapest, no JS render, datacenter IPs.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "spider.cloud.http"
+adapter     = "http_jsonl_stream"
+endpoint    = "https://api.spider.cloud/scrape"
+method      = "POST"
+tier        = 4
+cost        = 10                # $0.001/page in milli-cents
+timeout_ms  = 30000
+concurrency = 20
+
+[route.auth]
+kind = "bearer"
+env  = "SPIDER_CLOUD_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","request":"http","readability":true,"return_format":"markdown"}'''
+
+[route.parse]
+kind = "jsonl_first"
+path = "$.content"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+# ----------------------------------------------------------------------------
+# T5 — Chrome rendering, datacenter IPs.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "spider.cloud.chrome"
+adapter     = "http_jsonl_stream"
+endpoint    = "https://api.spider.cloud/scrape"
+method      = "POST"
+tier        = 5
+cost        = 50                # $0.005/page
+timeout_ms  = 60000
+concurrency = 10
+
+[route.auth]
+kind = "bearer"
+env  = "SPIDER_CLOUD_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","request":"chrome","readability":true,"return_format":"markdown"}'''
+
+[route.parse]
+kind = "jsonl_first"
+path = "$.content"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js = true
+
+# ----------------------------------------------------------------------------
+# T6 — Chrome + residential proxy.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "spider.cloud.chrome.residential"
+adapter     = "http_jsonl_stream"
+endpoint    = "https://api.spider.cloud/scrape"
+method      = "POST"
+tier        = 6
+cost        = 75                # $0.0075/page
+timeout_ms  = 60000
+concurrency = 8
+
+[route.auth]
+kind = "bearer"
+env  = "SPIDER_CLOUD_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","request":"chrome","proxy":"residential","readability":true,"return_format":"markdown"}'''
+
+[route.parse]
+kind = "jsonl_first"
+path = "$.content"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+
+# ----------------------------------------------------------------------------
+# T7 — Smart unblocker. Spider's own escalation ladder.
+# Production-recommended (per spider/CLAUDE.md SpiderCloudMode docs).
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "spider.cloud.smart"
+adapter     = "http_jsonl_stream"
+endpoint    = "https://api.spider.cloud/scrape"
+method      = "POST"
+tier        = 7
+cost        = 100               # $0.01/page
+timeout_ms  = 90000
+concurrency = 5
+
+[route.auth]
+kind = "bearer"
+env  = "SPIDER_CLOUD_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","request":"smart","readability":true,"return_format":"markdown"}'''
+
+[route.parse]
+kind = "jsonl_first"
+path = "$.content"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+stealth     = true

@@ -1,0 +1,41 @@
+# Apify — Bearer auth, sync actor run returning dataset items as JSON.
+#
+# Env var: APIFY_API_TOKEN
+# Actor:   apify/website-content-crawler (single-page mode via maxCrawlPages=1, maxCrawlDepth=0)
+# Endpoint: https://api.apify.com/v2/acts/apify~website-content-crawler/run-sync-get-dataset-items
+# Docs:    https://apify.com/apify/website-content-crawler/api
+#
+# Note: Apify URL-encodes `/` in actor IDs as `~`, so the path uses `apify~website-content-crawler`.
+# Response is an array of dataset items; we take `$[0].markdown`.
+
+[[route]]
+id          = "apify.web_scraper"
+adapter     = "http_json"
+endpoint    = "https://api.apify.com/v2/acts/apify~website-content-crawler/run-sync-get-dataset-items"
+method      = "POST"
+tier        = 9
+cost        = 500               # $0.05/page baseline (actor compute is consumption-based)
+timeout_ms  = 120000
+concurrency = 4
+
+[route.auth]
+kind = "bearer"
+env  = "APIFY_API_TOKEN"
+
+[route.body]
+kind     = "json"
+template = '''{"startUrls":[{"url":"{{url}}"}],"maxCrawlDepth":0,"maxCrawlPages":1,"saveMarkdown":true,"saveHtml":false}'''
+
+[route.parse]
+kind = "json_path"
+path = "$[0].markdown"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+stealth     = true
+fingerprint = true

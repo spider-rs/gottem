@@ -1,0 +1,26 @@
+# Spider Browser Cloud — remote headless Chrome via CDP, api_key in query string.
+# Same SPIDER_CLOUD_API_KEY as the spider.cloud.* HTTP/JSONL routes.
+#
+# Env var: SPIDER_CLOUD_API_KEY
+# Endpoint: wss://browser.spider.cloud/v1/browser?api_key=...
+# Docs:    https://spider.cloud/docs/api/browser
+
+[[route]]
+id          = "spider.browser_cloud"
+adapter     = "chrome_cdp"
+endpoint    = "wss://browser.spider.cloud/v1/browser?api_key={{env:SPIDER_CLOUD_API_KEY}}"
+method      = "GET"
+tier        = 8
+cost        = 150
+timeout_ms  = 90000
+concurrency = 5
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+stealth     = true
+fingerprint = true

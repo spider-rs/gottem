@@ -1,0 +1,75 @@
+# ZenRows routes — GET requests with apikey + url in query string.
+#
+# Env var: ZENROWS_API_KEY
+# Endpoint: https://api.zenrows.com/v1/
+# Docs:     https://docs.zenrows.com/api-reference
+#
+# ZenRows authenticates via query parameter (`apikey=...`), so we embed `{{env:ZENROWS_API_KEY}}`
+# directly into the endpoint template. The target URL is also a query param (`url=...`).
+
+# ----------------------------------------------------------------------------
+# T4 — Basic HTTP, no JS, datacenter IPs.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "zenrows.basic"
+adapter     = "direct_http"
+endpoint    = "https://api.zenrows.com/v1/?apikey={{env:ZENROWS_API_KEY}}&url={{url}}"
+method      = "GET"
+tier        = 4
+cost        = 10
+timeout_ms  = 30000
+concurrency = 20
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+# ----------------------------------------------------------------------------
+# T5 — JS render.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "zenrows.js"
+adapter     = "direct_http"
+endpoint    = "https://api.zenrows.com/v1/?apikey={{env:ZENROWS_API_KEY}}&url={{url}}&js_render=true"
+method      = "GET"
+tier        = 5
+cost        = 50
+timeout_ms  = 60000
+concurrency = 10
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js = true
+
+# ----------------------------------------------------------------------------
+# T6 — JS render + premium (residential) proxy.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "zenrows.premium"
+adapter     = "direct_http"
+endpoint    = "https://api.zenrows.com/v1/?apikey={{env:ZENROWS_API_KEY}}&url={{url}}&js_render=true&premium_proxy=true"
+method      = "GET"
+tier        = 6
+cost        = 75
+timeout_ms  = 60000
+concurrency = 8
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true

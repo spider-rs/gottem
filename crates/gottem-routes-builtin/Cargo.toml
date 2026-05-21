@@ -1,0 +1,35 @@
+[package]
+name = "gottem-routes-builtin"
+version = "0.1.0"
+description = "Built-in vendor route catalogs for gottem. Each vendor is a feature flag; routes ship as embedded TOML and load into a gottem RouteCatalogBuilder."
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+gottem-core = { path = "../gottem-core" }
+
+[features]
+default            = ["spider-cloud", "firecrawl"]
+spider-cloud       = []
+firecrawl          = []
+brightdata         = []
+zyte               = []
+zenrows            = []
+scrapingbee        = []
+brightdata-browser = []
+browserless        = []
+spider-browser     = []
+apify              = []
+oxylabs            = []
+two-captcha        = []
+all = [
+    "spider-cloud", "firecrawl", "brightdata", "zyte", "zenrows", "scrapingbee",
+    "brightdata-browser", "browserless", "spider-browser",
+    "apify", "oxylabs", "two-captcha",
+]
+
+[lints.rust]
+unsafe_code = "forbid"

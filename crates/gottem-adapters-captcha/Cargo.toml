@@ -1,0 +1,32 @@
+[package]
+name = "gottem-adapters-captcha"
+version = "0.1.0"
+description = "gottem CAPTCHA solver adapter. 2Captcha submit-then-poll protocol exposed as an Adapter — composable with the rest of the gottem ladder."
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+gottem-core = { path = "../gottem-core" }
+reqwest     = { workspace = true, features = ["rustls", "gzip", "brotli", "http2", "form", "query"] }
+async-trait = { workspace = true }
+bytes       = { workspace = true }
+serde_json  = { workspace = true }
+tokio       = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+url         = { workspace = true }
+http        = { workspace = true }
+
+[features]
+default = []
+
+[dev-dependencies]
+wiremock = "0.6"
+tokio    = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+await_holding_lock = "deny"

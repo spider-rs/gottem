@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="gottem icon">
+  <title>gottem icon</title>
+  <defs>
+    <linearGradient id="tierGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"  stop-color="#10b981"/>
+      <stop offset="48%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+    <linearGradient id="bgShade" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded-square dark background -->
+  <rect width="256" height="256" rx="56" fill="url(#bgShade)"/>
+
+  <!-- Concentric tier rings, faint -->
+  <g transform="translate(128,128)" stroke="#ffffff" fill="none">
+    <circle r="102" stroke-width="2" opacity="0.06"/>
+    <circle r="86"  stroke-width="2" opacity="0.10"/>
+    <circle r="70"  stroke-width="2" opacity="0.16"/>
+  </g>
+
+  <!-- Tier-gradient disc -->
+  <circle cx="128" cy="128" r="60" fill="url(#tierGradient)"/>
+  <circle cx="128" cy="128" r="60" fill="none" stroke="#0f172a" stroke-width="4"/>
+
+  <!-- Checkmark -->
+  <path d="M 96 130 L 118 154 L 162 102"
+        stroke="#0f172a"
+        stroke-width="13"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"/>
+</svg>

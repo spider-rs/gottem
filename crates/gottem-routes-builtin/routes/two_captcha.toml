@@ -1,0 +1,35 @@
+# 2Captcha solver route — used in CAPTCHA chains.
+#
+# Env var: TWO_CAPTCHA_API_KEY
+# Endpoint: https://2captcha.com/  (adapter handles in.php submit + res.php polling internally)
+# Docs:    https://2captcha.com/2captcha-api
+#
+# Unlike a content-fetching route, this returns a captcha TOKEN as `content`, not
+# the page HTML. Compose with another route to actually scrape:
+#
+#   1. Try cheap route → response is a CAPTCHA challenge
+#   2. Extract siteKey from the page
+#   3. fetch_once(captcha.2captcha, req_with_extras { siteKey, captchaType })
+#   4. Replay original URL with the returned token embedded
+#
+# `req.extra` must include:
+#   - captchaType: "recaptcha_v2" | "hcaptcha" | "turnstile"
+#   - siteKey:     the captcha site key
+#   - pageUrl:     (optional) defaults to req.url
+
+[[route]]
+id          = "captcha.2captcha"
+adapter     = "captcha_2captcha"
+endpoint    = "https://2captcha.com/"
+method      = "POST"
+tier        = 9
+cost        = 200               # $0.02/solve (varies $0.001–$0.05 by type)
+timeout_ms  = 180000
+concurrency = 4
+
+[route.auth]
+kind = "bearer"
+env  = "TWO_CAPTCHA_API_KEY"
+
+[route.caps]
+captcha = true
