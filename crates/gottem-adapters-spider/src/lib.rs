@@ -101,13 +101,16 @@ impl Adapter for SpiderAdapter {
     ) -> Result<ScrapeResponse, FetchError> {
         let url_str = req.url.as_str();
 
-        // Single-page fetch. No crawl scheduler, no broadcast channel — just an HTTP GET
-        // through spider's hardened client. `Page::new` returns a Page even on upstream
-        // errors; we read status_code below and map >=400 to FetchError::Status.
+        // Single-page fetch via spider's raw HTTP path. `new_page` keeps the same
+        // signature whether or not the `chrome` feature is enabled on spider (Page::new
+        // gets overloaded to take chrome-specific args when chrome is on, which would
+        // break feature unification across the workspace). new_page is the stable
+        // HTTP-only entry point. Returns a Page even on upstream errors; we read
+        // status_code below and map >=400 to FetchError::Status.
         let page = tokio::select! {
             biased;
             _ = cancel.cancelled() => return Err(FetchError::Cancelled),
-            p = spider::page::Page::new(url_str, &self.client) => p,
+            p = spider::page::Page::new_page(url_str, &self.client) => p,
         };
 
         let final_url = url::Url::parse(page.get_url()).unwrap_or_else(|_| req.url.clone());
