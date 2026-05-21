@@ -35,28 +35,47 @@ pub enum Tier {
 
 impl Tier {
     pub const ALL: [Tier; 10] = [
-        Tier::T0, Tier::T1, Tier::T2, Tier::T3, Tier::T4,
-        Tier::T5, Tier::T6, Tier::T7, Tier::T8, Tier::T9,
+        Tier::T0,
+        Tier::T1,
+        Tier::T2,
+        Tier::T3,
+        Tier::T4,
+        Tier::T5,
+        Tier::T6,
+        Tier::T7,
+        Tier::T8,
+        Tier::T9,
     ];
 
     /// One tier higher. Returns `None` at T9.
     pub fn next(self) -> Option<Tier> {
         let n = self as u8 + 1;
-        if n > 9 { None } else { Some(Self::from_u8(n).unwrap()) }
+        if n > 9 {
+            None
+        } else {
+            Some(Self::from_u8(n).unwrap())
+        }
     }
 
     pub fn from_u8(n: u8) -> Result<Tier, &'static str> {
-        Self::ALL.get(n as usize).copied().ok_or("tier out of range (0..=9)")
+        Self::ALL
+            .get(n as usize)
+            .copied()
+            .ok_or("tier out of range (0..=9)")
     }
 }
 
 impl TryFrom<u8> for Tier {
     type Error = &'static str;
-    fn try_from(n: u8) -> Result<Self, Self::Error> { Self::from_u8(n) }
+    fn try_from(n: u8) -> Result<Self, Self::Error> {
+        Self::from_u8(n)
+    }
 }
 
 impl From<Tier> for u8 {
-    fn from(t: Tier) -> u8 { t as u8 }
+    fn from(t: Tier) -> u8 {
+        t as u8
+    }
 }
 
 #[cfg(test)]

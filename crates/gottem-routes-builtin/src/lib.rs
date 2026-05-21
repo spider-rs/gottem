@@ -46,18 +46,54 @@ use gottem_core::{FetchError, RouteCatalogBuilder};
 /// you want finer control.
 pub fn register_all(builder: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
     let mut b = builder;
-    #[cfg(feature = "spider-cloud")]       { b = add_spider_cloud(b)?; }
-    #[cfg(feature = "firecrawl")]          { b = add_firecrawl(b)?; }
-    #[cfg(feature = "brightdata")]         { b = add_brightdata(b)?; }
-    #[cfg(feature = "zyte")]               { b = add_zyte(b)?; }
-    #[cfg(feature = "zenrows")]            { b = add_zenrows(b)?; }
-    #[cfg(feature = "scrapingbee")]        { b = add_scrapingbee(b)?; }
-    #[cfg(feature = "brightdata-browser")] { b = add_brightdata_browser(b)?; }
-    #[cfg(feature = "browserless")]        { b = add_browserless(b)?; }
-    #[cfg(feature = "spider-browser")]     { b = add_spider_browser(b)?; }
-    #[cfg(feature = "apify")]              { b = add_apify(b)?; }
-    #[cfg(feature = "oxylabs")]            { b = add_oxylabs(b)?; }
-    #[cfg(feature = "two-captcha")]        { b = add_two_captcha(b)?; }
+    #[cfg(feature = "spider-cloud")]
+    {
+        b = add_spider_cloud(b)?;
+    }
+    #[cfg(feature = "firecrawl")]
+    {
+        b = add_firecrawl(b)?;
+    }
+    #[cfg(feature = "brightdata")]
+    {
+        b = add_brightdata(b)?;
+    }
+    #[cfg(feature = "zyte")]
+    {
+        b = add_zyte(b)?;
+    }
+    #[cfg(feature = "zenrows")]
+    {
+        b = add_zenrows(b)?;
+    }
+    #[cfg(feature = "scrapingbee")]
+    {
+        b = add_scrapingbee(b)?;
+    }
+    #[cfg(feature = "brightdata-browser")]
+    {
+        b = add_brightdata_browser(b)?;
+    }
+    #[cfg(feature = "browserless")]
+    {
+        b = add_browserless(b)?;
+    }
+    #[cfg(feature = "spider-browser")]
+    {
+        b = add_spider_browser(b)?;
+    }
+    #[cfg(feature = "apify")]
+    {
+        b = add_apify(b)?;
+    }
+    #[cfg(feature = "oxylabs")]
+    {
+        b = add_oxylabs(b)?;
+    }
+    #[cfg(feature = "two-captcha")]
+    {
+        b = add_two_captcha(b)?;
+    }
     Ok(b)
 }
 

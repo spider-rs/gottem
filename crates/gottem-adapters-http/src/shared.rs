@@ -37,10 +37,7 @@ pub fn to_reqwest_method(m: HttpMethod) -> Method {
 
 /// Apply [`AuthSpec`] to a `RequestBuilder`. Reads credentials from environment variables
 /// declared in the route. Missing env vars surface as [`FetchError::Auth`].
-pub fn apply_auth(
-    builder: RequestBuilder,
-    auth: &AuthSpec,
-) -> Result<RequestBuilder, FetchError> {
+pub fn apply_auth(builder: RequestBuilder, auth: &AuthSpec) -> Result<RequestBuilder, FetchError> {
     match auth {
         AuthSpec::None => Ok(builder),
         AuthSpec::Bearer { env } => {
@@ -48,7 +45,11 @@ pub fn apply_auth(
                 .map_err(|_| FetchError::Auth(format!("missing env var: {env}")))?;
             Ok(builder.bearer_auth(token))
         }
-        AuthSpec::ApiKey { header, prefix, env } => {
+        AuthSpec::ApiKey {
+            header,
+            prefix,
+            env,
+        } => {
             let raw = std::env::var(env)
                 .map_err(|_| FetchError::Auth(format!("missing env var: {env}")))?;
             let value = match prefix.as_deref() {
@@ -77,10 +78,7 @@ pub fn apply_auth(
 
 /// Materialize a route's `BodyTemplate` into a byte payload, rendering `{{url}}`,
 /// `{{method}}`, and `{{env:NAME}}` via [`gottem_core::templating::render_body`].
-pub fn render_body(
-    body: &BodyTemplate,
-    req: &ScrapeRequest,
-) -> Result<Option<Bytes>, FetchError> {
+pub fn render_body(body: &BodyTemplate, req: &ScrapeRequest) -> Result<Option<Bytes>, FetchError> {
     match body {
         BodyTemplate::Empty => Ok(None),
         BodyTemplate::Json { template } => Ok(Some(Bytes::from(
@@ -100,10 +98,7 @@ pub fn render_body(
 /// Returns the extracted content as a string (or None for `RawBytes`). For `JsonPath`
 /// and `JsonlFirst`, drills into the parsed JSON at a dotted-path like `$.data.markdown`
 /// or `$.results[0].html` (converted to RFC 6901 JSON Pointer internally).
-pub fn parse_content(
-    parse: &ResponseParse,
-    body: &[u8],
-) -> Result<Option<String>, FetchError> {
+pub fn parse_content(parse: &ResponseParse, body: &[u8]) -> Result<Option<String>, FetchError> {
     use serde_json::Value;
     match parse {
         ResponseParse::RawText | ResponseParse::Html | ResponseParse::Markdown => {
@@ -267,7 +262,9 @@ mod tests {
     #[test]
     fn parse_content_jsonpath_extracts_field() {
         let body = br##"{"data":{"markdown":"# heading"}}"##;
-        let parse = ResponseParse::JsonPath { path: "$.data.markdown".into() };
+        let parse = ResponseParse::JsonPath {
+            path: "$.data.markdown".into(),
+        };
         let out = parse_content(&parse, body).unwrap().unwrap();
         assert_eq!(out, "# heading");
     }
@@ -275,7 +272,9 @@ mod tests {
     #[test]
     fn parse_content_jsonl_first_extracts_field() {
         let body = b"{\"content\":\"line one\"}\n{\"content\":\"line two\"}";
-        let parse = ResponseParse::JsonlFirst { path: "$.content".into() };
+        let parse = ResponseParse::JsonlFirst {
+            path: "$.content".into(),
+        };
         let out = parse_content(&parse, body).unwrap().unwrap();
         assert_eq!(out, "line one");
     }
@@ -283,7 +282,9 @@ mod tests {
     #[test]
     fn parse_content_jsonl_unwraps_array_wrapper() {
         let body = br#"[{"content":"wrapped"}]"#;
-        let parse = ResponseParse::JsonlFirst { path: "$.content".into() };
+        let parse = ResponseParse::JsonlFirst {
+            path: "$.content".into(),
+        };
         let out = parse_content(&parse, body).unwrap().unwrap();
         assert_eq!(out, "wrapped");
     }

@@ -23,7 +23,10 @@ pub struct AdapterContext {
 
 impl AdapterContext {
     pub fn new(attempt: u32) -> Self {
-        Self { attempt, started: Instant::now() }
+        Self {
+            attempt,
+            started: Instant::now(),
+        }
     }
 
     pub fn elapsed(&self) -> std::time::Duration {
@@ -57,7 +60,9 @@ pub struct AdapterRegistry {
 }
 
 impl AdapterRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn register(&mut self, adapter: Arc<dyn Adapter>) {
         let k = adapter.kind();
@@ -68,8 +73,12 @@ impl AdapterRegistry {
         self.by_kind.get(kind).cloned()
     }
 
-    pub fn len(&self) -> usize { self.by_kind.len() }
-    pub fn is_empty(&self) -> bool { self.by_kind.is_empty() }
+    pub fn len(&self) -> usize {
+        self.by_kind.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.by_kind.is_empty()
+    }
 }
 
 impl fmt::Debug for AdapterRegistry {

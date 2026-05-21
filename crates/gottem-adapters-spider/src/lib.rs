@@ -43,14 +43,20 @@ use gottem_core::{
 pub struct SpiderAdapter;
 
 impl SpiderAdapter {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
     /// Construct an `Arc<dyn Adapter>` ready to register with [`gottem_core::AdapterRegistry`].
-    pub fn arc() -> Arc<dyn Adapter> { Arc::new(Self::new()) }
+    pub fn arc() -> Arc<dyn Adapter> {
+        Arc::new(Self::new())
+    }
 }
 
 #[async_trait]
 impl Adapter for SpiderAdapter {
-    fn kind(&self) -> AdapterKind { AdapterKind::SpiderLocal }
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::SpiderLocal
+    }
 
     async fn execute(
         &self,

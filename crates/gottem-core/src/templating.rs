@@ -112,7 +112,10 @@ mod tests {
             &req("https://example.com/"),
         )
         .unwrap();
-        assert!(out.contains("key+with+spaces") || out.contains("key%20with%20spaces"), "got {out}");
+        assert!(
+            out.contains("key+with+spaces") || out.contains("key%20with%20spaces"),
+            "got {out}"
+        );
     }
 
     #[test]

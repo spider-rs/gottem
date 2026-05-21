@@ -154,7 +154,8 @@ impl Adapter for Captcha2CaptchaAdapter {
         let api_key = resolve_api_key(&route.auth)?;
         let challenge = Challenge::from_request(req)?;
 
-        let task_id = submit_task(&self.client, &self.submit_url, &api_key, &challenge, cancel).await?;
+        let task_id =
+            submit_task(&self.client, &self.submit_url, &api_key, &challenge, cancel).await?;
 
         // Most CAPTCHAs need 10-30s; do an initial delay before the first poll to avoid
         // hammering res.php with NOT_READY responses.
@@ -284,8 +285,9 @@ impl Challenge {
 
 fn resolve_api_key(auth: &AuthSpec) -> Result<String, FetchError> {
     match auth {
-        AuthSpec::Bearer { env } | AuthSpec::ApiKey { env, .. } => std::env::var(env)
-            .map_err(|_| FetchError::Auth(format!("missing env var: {env}"))),
+        AuthSpec::Bearer { env } | AuthSpec::ApiKey { env, .. } => {
+            std::env::var(env).map_err(|_| FetchError::Auth(format!("missing env var: {env}")))
+        }
         other => Err(FetchError::Config(format!(
             "captcha solver expects AuthSpec::Bearer or ApiKey, got {other:?}"
         ))),
@@ -352,7 +354,12 @@ async fn poll_solution(
     cancel: &CancelToken,
 ) -> Result<String, FetchError> {
     for _attempt in 0..max_polls {
-        let params = [("key", api_key), ("action", "get"), ("id", task_id), ("json", "1")];
+        let params = [
+            ("key", api_key),
+            ("action", "get"),
+            ("id", task_id),
+            ("json", "1"),
+        ];
 
         let send_fut = client.get(result_url).query(&params).send();
         let resp = tokio::select! {

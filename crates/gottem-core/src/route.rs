@@ -4,8 +4,12 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    capabilities::Capabilities, error::FetchError, request::{HttpMethod, ScrapeRequest},
-    templating, tier::Tier, validator::Validator,
+    capabilities::Capabilities,
+    error::FetchError,
+    request::{HttpMethod, ScrapeRequest},
+    templating,
+    tier::Tier,
+    validator::Validator,
 };
 
 pub type RouteId = Arc<str>;
@@ -63,10 +67,18 @@ pub struct Route {
     pub retry_on: RetryClassifier,
 }
 
-fn default_method() -> HttpMethod { HttpMethod::Get }
-fn default_timeout_ms() -> u64 { 30_000 }
-fn default_concurrency() -> u32 { 16 }
-fn default_priority() -> u32 { 100 }
+fn default_method() -> HttpMethod {
+    HttpMethod::Get
+}
+fn default_timeout_ms() -> u64 {
+    30_000
+}
+fn default_concurrency() -> u32 {
+    16
+}
+fn default_priority() -> u32 {
+    100
+}
 
 impl Route {
     pub fn timeout(&self) -> std::time::Duration {
@@ -92,10 +104,17 @@ impl EndpointTemplate {
     /// stored as-is and validated when [`render`](Self::render) is called.
     pub fn parse(s: &str) -> Result<Self, FetchError> {
         if templating::has_placeholder(s) {
-            Ok(Self { template: s.to_string(), cached: None })
+            Ok(Self {
+                template: s.to_string(),
+                cached: None,
+            })
         } else {
-            let url = Url::parse(s).map_err(|e| FetchError::Config(format!("endpoint URL: {e}")))?;
-            Ok(Self { template: s.to_string(), cached: Some(url) })
+            let url =
+                Url::parse(s).map_err(|e| FetchError::Config(format!("endpoint URL: {e}")))?;
+            Ok(Self {
+                template: s.to_string(),
+                cached: Some(url),
+            })
         }
     }
 
@@ -111,10 +130,14 @@ impl EndpointTemplate {
     }
 
     /// Raw template string (with placeholders unresolved). Useful for logging.
-    pub fn as_str(&self) -> &str { &self.template }
+    pub fn as_str(&self) -> &str {
+        &self.template
+    }
 
     /// `true` if this endpoint requires per-request substitution.
-    pub fn is_template(&self) -> bool { self.cached.is_none() }
+    pub fn is_template(&self) -> bool {
+        self.cached.is_none()
+    }
 }
 
 impl std::fmt::Display for EndpointTemplate {

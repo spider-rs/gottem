@@ -120,7 +120,11 @@ struct FetchArgs {
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
-enum Mode { Ladder, Race, Hedge }
+enum Mode {
+    Ladder,
+    Race,
+    Hedge,
+}
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
 enum Format {
@@ -183,8 +187,8 @@ fn build_setup(config_path: Option<&std::path::Path>) -> Result<Setup> {
     builder = gottem_routes_builtin::register_all(builder)
         .map_err(|e| anyhow!("loading builtin routes: {e}"))?;
     if let Some(path) = config_path {
-        let toml = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let toml =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         builder = builder
             .add_toml(&toml)
             .map_err(|e| anyhow!("parsing user routes from {}: {e}", path.display()))?;
@@ -350,11 +354,17 @@ async fn run_probe(args: ProbeArgs, setup: Setup) -> Result<()> {
             let started = Instant::now();
             match orch.execute_once(route, &req, 0, &cancel).await {
                 Ok(resp) => {
-                    let bytes = resp.content.as_deref().map(str::len).unwrap_or(resp.body.len());
+                    let bytes = resp
+                        .content
+                        .as_deref()
+                        .map(str::len)
+                        .unwrap_or(resp.body.len());
                     let elapsed = started.elapsed();
-                    let validators_ok = route.validate.iter().all(|v| {
-                        v.check(&resp.body, resp.content.as_deref()).is_ok()
-                    }) && bytes >= args.min_bytes;
+                    let validators_ok = route
+                        .validate
+                        .iter()
+                        .all(|v| v.check(&resp.body, resp.content.as_deref()).is_ok())
+                        && bytes >= args.min_bytes;
                     if validators_ok {
                         println!("OK — {bytes} bytes ({}ms)", elapsed.as_millis());
                         if args.preview {
@@ -449,8 +459,7 @@ fn routes_validate(catalog: &RouteCatalog) -> Result<()> {
             warnings += 1;
         }
     }
-    let envs: std::collections::HashSet<&str> =
-        required.iter().map(|(_, e)| e.as_str()).collect();
+    let envs: std::collections::HashSet<&str> = required.iter().map(|(_, e)| e.as_str()).collect();
     println!(
         "OK    {} routes, {} unique env vars, {warnings} missing",
         catalog.len(),
@@ -475,8 +484,10 @@ fn routes_show(catalog: &RouteCatalog, id: &str) -> Result<()> {
     println!("timeout_ms   : {}", r.timeout_ms);
     println!("concurrency  : {}", r.concurrency);
     println!("auth         : {}", describe_auth(&r.auth));
-    println!("caps         : js={} residential={} stealth={} captcha={}",
-        r.caps.js, r.caps.residential, r.caps.stealth, r.caps.captcha);
+    println!(
+        "caps         : js={} residential={} stealth={} captcha={}",
+        r.caps.js, r.caps.residential, r.caps.stealth, r.caps.captcha
+    );
     if !r.headers.is_empty() {
         println!("headers      :");
         for (k, v) in &r.headers {
@@ -567,7 +578,11 @@ fn describe_auth(auth: &AuthSpec) -> String {
     match auth {
         AuthSpec::None => "none".into(),
         AuthSpec::Bearer { env } => format!("Bearer ${{${env}}}"),
-        AuthSpec::ApiKey { header, prefix, env } => {
+        AuthSpec::ApiKey {
+            header,
+            prefix,
+            env,
+        } => {
             let p = prefix.as_deref().unwrap_or("");
             format!("ApiKey header={header} value='{p}${{${env}}}'")
         }

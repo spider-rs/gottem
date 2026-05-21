@@ -67,7 +67,9 @@ pub struct DirectHttpAdapter {
 }
 
 impl DirectHttpAdapter {
-    pub fn new(client: Client) -> Self { Self { client } }
+    pub fn new(client: Client) -> Self {
+        Self { client }
+    }
 
     pub fn shared() -> Arc<dyn Adapter> {
         Arc::new(Self::new(build_default_client()))
@@ -76,7 +78,9 @@ impl DirectHttpAdapter {
 
 #[async_trait]
 impl Adapter for DirectHttpAdapter {
-    fn kind(&self) -> AdapterKind { AdapterKind::DirectHttp }
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::DirectHttp
+    }
 
     async fn execute(
         &self,
@@ -121,13 +125,19 @@ pub struct HttpJsonAdapter {
 }
 
 impl HttpJsonAdapter {
-    pub fn new(client: Client) -> Self { Self { client } }
-    pub fn shared() -> Arc<dyn Adapter> { Arc::new(Self::new(build_default_client())) }
+    pub fn new(client: Client) -> Self {
+        Self { client }
+    }
+    pub fn shared() -> Arc<dyn Adapter> {
+        Arc::new(Self::new(build_default_client()))
+    }
 }
 
 #[async_trait]
 impl Adapter for HttpJsonAdapter {
-    fn kind(&self) -> AdapterKind { AdapterKind::HttpJson }
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::HttpJson
+    }
 
     async fn execute(
         &self,
@@ -174,13 +184,19 @@ pub struct HttpJsonlStreamAdapter {
 }
 
 impl HttpJsonlStreamAdapter {
-    pub fn new(client: Client) -> Self { Self { client } }
-    pub fn shared() -> Arc<dyn Adapter> { Arc::new(Self::new(build_default_client())) }
+    pub fn new(client: Client) -> Self {
+        Self { client }
+    }
+    pub fn shared() -> Arc<dyn Adapter> {
+        Arc::new(Self::new(build_default_client()))
+    }
 }
 
 #[async_trait]
 impl Adapter for HttpJsonlStreamAdapter {
-    fn kind(&self) -> AdapterKind { AdapterKind::HttpJsonlStream }
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::HttpJsonlStream
+    }
 
     async fn execute(
         &self,
@@ -195,7 +211,10 @@ impl Adapter for HttpJsonlStreamAdapter {
             .request(to_reqwest_method(route.method), resolved)
             .timeout(route.timeout())
             .header("content-type", "application/json")
-            .header("accept", "application/jsonl, application/x-ndjson, application/json");
+            .header(
+                "accept",
+                "application/jsonl, application/x-ndjson, application/json",
+            );
 
         for (k, v) in &route.headers {
             builder = builder.header(k.as_str(), v.as_str());

@@ -78,10 +78,18 @@ impl Orchestrator {
         }
     }
 
-    pub fn catalog(&self) -> &RouteCatalog { &self.catalog }
-    pub fn adapters(&self) -> &AdapterRegistry { &self.adapters }
-    pub fn budget(&self) -> &Budget { &self.budget }
-    pub fn hedge_tracker(&self) -> &HedgeTracker { &self.hedge_tracker }
+    pub fn catalog(&self) -> &RouteCatalog {
+        &self.catalog
+    }
+    pub fn adapters(&self) -> &AdapterRegistry {
+        &self.adapters
+    }
+    pub fn budget(&self) -> &Budget {
+        &self.budget
+    }
+    pub fn hedge_tracker(&self) -> &HedgeTracker {
+        &self.hedge_tracker
+    }
 
     /// Single-attempt dispatch through a specific route. Enforces budget, circuit breaker,
     /// per-route concurrency limit, and propagates cancellation via `tokio::select!`.
@@ -92,9 +100,10 @@ impl Orchestrator {
         attempt: u32,
         cancel: &CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
-        let breaker = self.breakers.get(&route.id).ok_or_else(|| {
-            FetchError::Config(format!("no breaker for route {}", route.id))
-        })?;
+        let breaker = self
+            .breakers
+            .get(&route.id)
+            .ok_or_else(|| FetchError::Config(format!("no breaker for route {}", route.id)))?;
         if !breaker.allow() {
             return Err(FetchError::CircuitOpen(route.id.clone()));
         }
@@ -298,9 +307,7 @@ impl Orchestrator {
             return Ok(resp);
         }
 
-        let base_delay = self
-            .hedge_tracker
-            .adaptive_delay(hedge_config.delay);
+        let base_delay = self.hedge_tracker.adaptive_delay(hedge_config.delay);
 
         let race_cancel = CancelToken::new();
         let mut tasks = FuturesUnordered::new();
@@ -341,8 +348,7 @@ impl Orchestrator {
                 Ok(resp) => {
                     // Validate against the route's declared validators before declaring victory.
                     if let Some(route) = self.catalog.get(&resp.route_id) {
-                        if let Some(reason) =
-                            validate(&route, &resp.body, resp.content.as_deref())
+                        if let Some(reason) = validate(&route, &resp.body, resp.content.as_deref())
                         {
                             last_err = Some(FetchError::Validation(reason));
                             continue;
@@ -407,8 +413,7 @@ impl Orchestrator {
                     race_cancel.cancel();
                     // Validate before declaring winner.
                     if let Some(route) = self.catalog.get(&resp.route_id) {
-                        if let Some(reason) =
-                            validate(&route, &resp.body, resp.content.as_deref())
+                        if let Some(reason) = validate(&route, &resp.body, resp.content.as_deref())
                         {
                             last_err = Some(FetchError::Validation(reason));
                             // Reset cancel so still-pending tasks get a chance (rare edge case).

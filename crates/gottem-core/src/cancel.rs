@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tokio::sync::Notify;
 
 /// Lightweight cancellation token: cancellable from any task, observable via [`Self::cancelled`].
@@ -19,7 +19,9 @@ struct Inner {
 }
 
 impl CancelToken {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Idempotent; notifies all awaiters exactly once.
     pub fn cancel(&self) {
@@ -35,10 +37,14 @@ impl CancelToken {
     /// Future that resolves once cancellation is requested. Safe to await even if already
     /// cancelled (returns immediately). Safe to await from multiple tasks concurrently.
     pub async fn cancelled(&self) {
-        if self.is_cancelled() { return; }
+        if self.is_cancelled() {
+            return;
+        }
         let notified = self.inner.notify.notified();
         // Re-check after registering the waiter — closes the cancel-before-notify race.
-        if self.is_cancelled() { return; }
+        if self.is_cancelled() {
+            return;
+        }
         notified.await;
     }
 }
@@ -51,7 +57,9 @@ mod tests {
     async fn cancel_propagates() {
         let t = CancelToken::new();
         let t2 = t.clone();
-        let h = tokio::spawn(async move { t2.cancelled().await; });
+        let h = tokio::spawn(async move {
+            t2.cancelled().await;
+        });
         assert!(!t.is_cancelled());
         t.cancel();
         h.await.unwrap();

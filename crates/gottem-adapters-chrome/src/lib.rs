@@ -99,22 +99,17 @@ impl Adapter for ChromeCdpAdapter {
         // ---- Drive CDP events on a background task ------------------------
         // chromiumoxide requires the handler to be polled or *all* operations hang.
         // Aborting at the end closes the connection cleanly.
-        let handler_task = tokio::spawn(async move {
-            while handler.next().await.is_some() {}
-        });
+        let handler_task = tokio::spawn(async move { while handler.next().await.is_some() {} });
 
         // ---- Navigate + content (cancel + per-route timeout) --------------
         let work = navigate_and_extract(&browser, req.url.as_str());
-        let work_outcome = tokio::time::timeout(
-            route.timeout(),
-            async {
-                tokio::select! {
-                    biased;
-                    _ = cancel.cancelled() => Err(FetchError::Cancelled),
-                    r = work => r,
-                }
-            },
-        )
+        let work_outcome = tokio::time::timeout(route.timeout(), async {
+            tokio::select! {
+                biased;
+                _ = cancel.cancelled() => Err(FetchError::Cancelled),
+                r = work => r,
+            }
+        })
         .await;
 
         // ---- Cleanup: always abort handler; browser drops at scope exit ---
@@ -183,8 +178,8 @@ pub(crate) fn build_ws_url(route: &Route, req: &ScrapeRequest) -> Result<String,
     let mut url = route.endpoint.render(req)?;
 
     if let AuthSpec::WsUserinfo { env } = &route.auth {
-        let userinfo = std::env::var(env)
-            .map_err(|_| FetchError::Auth(format!("missing env var: {env}")))?;
+        let userinfo =
+            std::env::var(env).map_err(|_| FetchError::Auth(format!("missing env var: {env}")))?;
         let (user, pass) = match userinfo.split_once(':') {
             Some((u, p)) => (u.to_string(), Some(p.to_string())),
             None => (userinfo, None),

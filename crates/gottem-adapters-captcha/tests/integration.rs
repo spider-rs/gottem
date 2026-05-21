@@ -20,7 +20,9 @@ fn captcha_route() -> Route {
         adapter: AdapterKind::Custom(Arc::from(ADAPTER_KIND_NAME)),
         endpoint: EndpointTemplate::parse("https://2captcha.com/").unwrap(),
         method: HttpMethod::Post,
-        auth: AuthSpec::Bearer { env: "GOTTEM_TEST_2CAPTCHA_KEY".into() },
+        auth: AuthSpec::Bearer {
+            env: "GOTTEM_TEST_2CAPTCHA_KEY".into(),
+        },
         headers: vec![],
         body: Default::default(),
         parse: Default::default(),
@@ -61,21 +63,25 @@ async fn submit_then_poll_resolves_token() {
     let server = MockServer::start().await;
 
     // Submit returns task id 12345.
-    Mock::given(method("POST")).and(path("/in.php"))
+    Mock::given(method("POST"))
+        .and(path("/in.php"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(r#"{"status":1,"request":"12345"}"#),
+            ResponseTemplate::new(200).set_body_string(r#"{"status":1,"request":"12345"}"#),
         )
-        .mount(&server).await;
+        .mount(&server)
+        .await;
 
     // First poll: NOT_READY. Second poll: OK with token.
-    Mock::given(method("GET")).and(path("/res.php")).and(query_param("id", "12345"))
+    Mock::given(method("GET"))
+        .and(path("/res.php"))
+        .and(query_param("id", "12345"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(r#"{"status":0,"request":"CAPCHA_NOT_READY"}"#),
         )
         .up_to_n_times(1)
-        .mount(&server).await;
+        .mount(&server)
+        .await;
     Mock::given(method("GET")).and(path("/res.php")).and(query_param("id", "12345"))
         .respond_with(
             ResponseTemplate::new(200)
@@ -86,10 +92,15 @@ async fn submit_then_poll_resolves_token() {
     let adapter = adapter_against(&server);
     let route = captcha_route();
     let req = captcha_req("recaptcha_v2", "6Lc-test-key", "https://example.com/login");
-    let resp = adapter.execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
-        .await.expect("captcha solved");
+    let resp = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
+        .await
+        .expect("captcha solved");
 
-    assert_eq!(resp.content.as_deref(), Some("SOLVED-TOKEN-PAYLOAD-very-long-string-of-base64-or-similar-data"));
+    assert_eq!(
+        resp.content.as_deref(),
+        Some("SOLVED-TOKEN-PAYLOAD-very-long-string-of-base64-or-similar-data")
+    );
     assert_eq!(resp.tier, Tier::T9);
     assert_eq!(resp.route_id.as_ref(), "captcha.2captcha");
 }
@@ -98,18 +109,22 @@ async fn submit_then_poll_resolves_token() {
 async fn submit_wrong_key_returns_auth_error() {
     std::env::set_var("GOTTEM_TEST_2CAPTCHA_KEY", "bad-key");
     let server = MockServer::start().await;
-    Mock::given(method("POST")).and(path("/in.php"))
+    Mock::given(method("POST"))
+        .and(path("/in.php"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(r#"{"status":0,"request":"ERROR_WRONG_USER_KEY"}"#),
         )
-        .mount(&server).await;
+        .mount(&server)
+        .await;
 
     let adapter = adapter_against(&server);
     let route = captcha_route();
     let req = captcha_req("recaptcha_v2", "6Lc-test", "https://example.com/");
-    let err = adapter.execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
-        .await.unwrap_err();
+    let err = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
+        .await
+        .unwrap_err();
     assert!(matches!(err, FetchError::Auth(_)), "got {err:?}");
 }
 
@@ -117,25 +132,30 @@ async fn submit_wrong_key_returns_auth_error() {
 async fn poll_exhausted_returns_timeout() {
     std::env::set_var("GOTTEM_TEST_2CAPTCHA_KEY", "test-key");
     let server = MockServer::start().await;
-    Mock::given(method("POST")).and(path("/in.php"))
+    Mock::given(method("POST"))
+        .and(path("/in.php"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(r#"{"status":1,"request":"7777"}"#),
+            ResponseTemplate::new(200).set_body_string(r#"{"status":1,"request":"7777"}"#),
         )
-        .mount(&server).await;
+        .mount(&server)
+        .await;
     // Every poll returns NOT_READY — we should give up after max_polls.
-    Mock::given(method("GET")).and(path("/res.php"))
+    Mock::given(method("GET"))
+        .and(path("/res.php"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string(r#"{"status":0,"request":"CAPCHA_NOT_READY"}"#),
         )
-        .mount(&server).await;
+        .mount(&server)
+        .await;
 
     let adapter = adapter_against(&server);
     let route = captcha_route();
     let req = captcha_req("recaptcha_v2", "6Lc-test", "https://example.com/");
-    let err = adapter.execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
-        .await.unwrap_err();
+    let err = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
+        .await
+        .unwrap_err();
     assert!(matches!(err, FetchError::Timeout(_)), "got {err:?}");
 }
 
@@ -148,8 +168,10 @@ async fn missing_capt_type_extra_is_config_error() {
     let mut req = ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
     req.extra.insert("siteKey".into(), json!("6Lc-test"));
     // intentionally NO captchaType
-    let err = adapter.execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
-        .await.unwrap_err();
+    let err = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
+        .await
+        .unwrap_err();
     assert!(matches!(err, FetchError::Config(_)), "got {err:?}");
 }
 
@@ -160,10 +182,13 @@ async fn missing_site_key_extra_is_config_error() {
     let adapter = adapter_against(&server);
     let route = captcha_route();
     let mut req = ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
-    req.extra.insert("captchaType".into(), json!("recaptcha_v2"));
+    req.extra
+        .insert("captchaType".into(), json!("recaptcha_v2"));
     // intentionally NO siteKey
-    let err = adapter.execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
-        .await.unwrap_err();
+    let err = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
+        .await
+        .unwrap_err();
     assert!(matches!(err, FetchError::Config(_)), "got {err:?}");
 }
 
@@ -174,8 +199,10 @@ async fn unknown_captcha_type_is_config_error() {
     let adapter = adapter_against(&server);
     let route = captcha_route();
     let req = captcha_req("solvepuzzle_v1", "6Lc-test", "https://example.com/");
-    let err = adapter.execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
-        .await.unwrap_err();
+    let err = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
+        .await
+        .unwrap_err();
     assert!(matches!(err, FetchError::Config(_)), "got {err:?}");
 }
 
@@ -183,12 +210,13 @@ async fn unknown_captcha_type_is_config_error() {
 async fn cancel_aborts_during_initial_delay() {
     std::env::set_var("GOTTEM_TEST_2CAPTCHA_KEY", "test-key");
     let server = MockServer::start().await;
-    Mock::given(method("POST")).and(path("/in.php"))
+    Mock::given(method("POST"))
+        .and(path("/in.php"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(r#"{"status":1,"request":"99999"}"#),
+            ResponseTemplate::new(200).set_body_string(r#"{"status":1,"request":"99999"}"#),
         )
-        .mount(&server).await;
+        .mount(&server)
+        .await;
 
     let adapter = Captcha2CaptchaAdapter::new()
         .with_endpoints(
@@ -211,9 +239,14 @@ async fn cancel_aborts_during_initial_delay() {
     });
 
     let started = std::time::Instant::now();
-    let err = adapter.execute(&route, &req, &AdapterContext::new(0), &cancel)
-        .await.unwrap_err();
+    let err = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &cancel)
+        .await
+        .unwrap_err();
     let elapsed = started.elapsed();
-    assert!(elapsed < Duration::from_secs(2), "cancel propagation too slow: {elapsed:?}");
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "cancel propagation too slow: {elapsed:?}"
+    );
     assert!(matches!(err, FetchError::Cancelled), "got {err:?}");
 }

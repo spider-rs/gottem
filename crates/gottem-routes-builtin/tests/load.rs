@@ -16,8 +16,14 @@ fn spider_cloud_loads_4_routes_tiers_4_through_7() {
         "spider.cloud.chrome.residential",
         "spider.cloud.smart",
     ] {
-        let route = catalog.get(id).unwrap_or_else(|| panic!("missing route {id}"));
-        assert_eq!(route.adapter, AdapterKind::HttpJsonlStream, "{id} should use jsonl stream");
+        let route = catalog
+            .get(id)
+            .unwrap_or_else(|| panic!("missing route {id}"));
+        assert_eq!(
+            route.adapter,
+            AdapterKind::HttpJsonlStream,
+            "{id} should use jsonl stream"
+        );
     }
     assert_eq!(catalog.get("spider.cloud.http").unwrap().tier, Tier::T4);
     assert_eq!(catalog.get("spider.cloud.smart").unwrap().tier, Tier::T7);
@@ -66,7 +72,10 @@ fn zenrows_loads_with_endpoint_template() {
         .build();
     assert_eq!(catalog.len(), 3);
     let basic = catalog.get("zenrows.basic").unwrap();
-    assert!(basic.endpoint.is_template(), "zenrows endpoint must be a template");
+    assert!(
+        basic.endpoint.is_template(),
+        "zenrows endpoint must be a template"
+    );
     assert!(basic.endpoint.as_str().contains("{{env:ZENROWS_API_KEY}}"));
     assert!(basic.endpoint.as_str().contains("{{url}}"));
     assert_eq!(basic.tier, Tier::T4);
@@ -82,7 +91,10 @@ fn scrapingbee_loads_with_endpoint_template() {
     assert_eq!(catalog.len(), 3);
     let basic = catalog.get("scrapingbee.basic").unwrap();
     assert!(basic.endpoint.is_template());
-    assert!(basic.endpoint.as_str().contains("{{env:SCRAPINGBEE_API_KEY}}"));
+    assert!(basic
+        .endpoint
+        .as_str()
+        .contains("{{env:SCRAPINGBEE_API_KEY}}"));
     let premium = catalog.get("scrapingbee.premium").unwrap();
     assert!(premium.caps.js && premium.caps.residential);
 }
@@ -114,18 +126,42 @@ fn register_all_succeeds_with_default_features() {
         .build();
 
     let mut expected = 0usize;
-    if cfg!(feature = "spider-cloud")       { expected += 4; }
-    if cfg!(feature = "firecrawl")          { expected += 2; }
-    if cfg!(feature = "brightdata")         { expected += 1; }
-    if cfg!(feature = "zyte")               { expected += 1; }
-    if cfg!(feature = "zenrows")            { expected += 3; }
-    if cfg!(feature = "scrapingbee")        { expected += 3; }
-    if cfg!(feature = "brightdata-browser") { expected += 1; }
-    if cfg!(feature = "browserless")        { expected += 1; }
-    if cfg!(feature = "spider-browser")     { expected += 1; }
-    if cfg!(feature = "apify")              { expected += 1; }
-    if cfg!(feature = "oxylabs")            { expected += 1; }
-    if cfg!(feature = "two-captcha")        { expected += 1; }
+    if cfg!(feature = "spider-cloud") {
+        expected += 4;
+    }
+    if cfg!(feature = "firecrawl") {
+        expected += 2;
+    }
+    if cfg!(feature = "brightdata") {
+        expected += 1;
+    }
+    if cfg!(feature = "zyte") {
+        expected += 1;
+    }
+    if cfg!(feature = "zenrows") {
+        expected += 3;
+    }
+    if cfg!(feature = "scrapingbee") {
+        expected += 3;
+    }
+    if cfg!(feature = "brightdata-browser") {
+        expected += 1;
+    }
+    if cfg!(feature = "browserless") {
+        expected += 1;
+    }
+    if cfg!(feature = "spider-browser") {
+        expected += 1;
+    }
+    if cfg!(feature = "apify") {
+        expected += 1;
+    }
+    if cfg!(feature = "oxylabs") {
+        expected += 1;
+    }
+    if cfg!(feature = "two-captcha") {
+        expected += 1;
+    }
 
     assert_eq!(catalog.len(), expected, "route count mismatch");
 }
@@ -147,7 +183,10 @@ fn two_captcha_loads_with_custom_adapter_and_captcha_caps() {
         AuthSpec::Bearer { env } => assert_eq!(env, "2CAPTCHA_API_KEY"),
         other => panic!("expected Bearer auth, got {other:?}"),
     }
-    assert!(r.caps.captcha, "captcha route must advertise captcha capability");
+    assert!(
+        r.caps.captcha,
+        "captcha route must advertise captcha capability"
+    );
 }
 
 #[cfg(feature = "apify")]
@@ -168,7 +207,10 @@ fn apify_loads_with_bearer_and_first_item_jsonpath() {
         ResponseParse::JsonPath { path } => assert_eq!(path, "$[0].markdown"),
         other => panic!("expected JsonPath for Apify, got {other:?}"),
     }
-    assert!(r.endpoint.as_str().contains("apify~website-content-crawler"));
+    assert!(r
+        .endpoint
+        .as_str()
+        .contains("apify~website-content-crawler"));
 }
 
 #[cfg(feature = "oxylabs")]
@@ -194,7 +236,11 @@ fn oxylabs_loads_with_basic_auth_and_results_jsonpath() {
     }
 }
 
-#[cfg(all(feature = "brightdata-browser", feature = "browserless", feature = "spider-browser"))]
+#[cfg(all(
+    feature = "brightdata-browser",
+    feature = "browserless",
+    feature = "spider-browser"
+))]
 #[test]
 fn chrome_routes_load_at_t8_with_ws_endpoints() {
     use gottem_core::{AdapterKind, AuthSpec, RouteCatalogBuilder, Tier};
@@ -217,12 +263,24 @@ fn chrome_routes_load_at_t8_with_ws_endpoints() {
     }
 
     let bless = catalog.get("browserless.cdp").unwrap();
-    assert!(bless.endpoint.is_template(), "browserless uses query-template auth");
-    assert!(bless.endpoint.as_str().contains("{{env:BROWSERLESS_TOKEN}}"));
+    assert!(
+        bless.endpoint.is_template(),
+        "browserless uses query-template auth"
+    );
+    assert!(bless
+        .endpoint
+        .as_str()
+        .contains("{{env:BROWSERLESS_TOKEN}}"));
 
     let sbc = catalog.get("spider.browser_cloud").unwrap();
-    assert!(sbc.endpoint.as_str().contains("{{env:SPIDER_CLOUD_API_KEY}}"));
-    assert!(sbc.caps.fingerprint, "spider browser cloud advertises fingerprinting");
+    assert!(sbc
+        .endpoint
+        .as_str()
+        .contains("{{env:SPIDER_CLOUD_API_KEY}}"));
+    assert!(
+        sbc.caps.fingerprint,
+        "spider browser cloud advertises fingerprinting"
+    );
 }
 
 #[test]

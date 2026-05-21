@@ -3,11 +3,7 @@ use std::sync::Arc;
 use url::Url;
 
 use crate::{
-    capabilities::Capabilities,
-    catalog::RouteCatalog,
-    error::FetchError,
-    route::Route,
-    tier::Tier,
+    capabilities::Capabilities, catalog::RouteCatalog, error::FetchError, route::Route, tier::Tier,
 };
 
 /// Outcome of a completed (or failed) attempt, handed to a [`RetryStrategy`] so it can

@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::{error::FetchError, route::{Route, RouteId}, tier::Tier};
+use crate::{
+    error::FetchError,
+    route::{Route, RouteId},
+    tier::Tier,
+};
 
 /// Immutable, frozen registry of routes. Lookups are lock-free hash reads.
 #[derive(Debug)]
@@ -11,7 +15,9 @@ pub struct RouteCatalog {
 }
 
 impl RouteCatalog {
-    pub fn builder() -> RouteCatalogBuilder { RouteCatalogBuilder::default() }
+    pub fn builder() -> RouteCatalogBuilder {
+        RouteCatalogBuilder::default()
+    }
 
     pub fn get(&self, id: &str) -> Option<Arc<Route>> {
         self.by_id.get(id).cloned()
@@ -25,8 +31,12 @@ impl RouteCatalog {
         self.by_id.values()
     }
 
-    pub fn len(&self) -> usize { self.by_id.len() }
-    pub fn is_empty(&self) -> bool { self.by_id.is_empty() }
+    pub fn len(&self) -> usize {
+        self.by_id.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.by_id.is_empty()
+    }
 }
 
 #[derive(Default)]
@@ -35,7 +45,9 @@ pub struct RouteCatalogBuilder {
 }
 
 impl RouteCatalogBuilder {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn add(mut self, route: Route) -> Self {
         self.routes.push(Arc::new(route));
@@ -54,8 +66,8 @@ impl RouteCatalogBuilder {
             #[serde(default)]
             route: Vec<Route>,
         }
-        let doc: Doc = toml::from_str(toml_str)
-            .map_err(|e| FetchError::Config(format!("toml parse: {e}")))?;
+        let doc: Doc =
+            toml::from_str(toml_str).map_err(|e| FetchError::Config(format!("toml parse: {e}")))?;
         for r in doc.route {
             self.routes.push(Arc::new(r));
         }

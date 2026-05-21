@@ -7,11 +7,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
+use gottem_adapters_spider::SpiderAdapter;
 use gottem_core::{
     Adapter, AdapterContext, AdapterKind, CancelToken, Capabilities, EndpointTemplate, FetchError,
     HttpMethod, Route, ScrapeRequest, Tier, Validator,
 };
-use gottem_adapters_spider::SpiderAdapter;
 use url::Url;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -42,7 +42,10 @@ async fn fetches_200_html_and_returns_content() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("<html><body>hello world wide enough</body></html>"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string("<html><body>hello world wide enough</body></html>"),
+        )
         .mount(&server)
         .await;
 
@@ -53,11 +56,17 @@ async fn fetches_200_html_and_returns_content() {
     let ctx = AdapterContext::new(0);
     let cancel = CancelToken::new();
 
-    let resp = adapter.execute(&route, &req, &ctx, &cancel).await.expect("expected success");
+    let resp = adapter
+        .execute(&route, &req, &ctx, &cancel)
+        .await
+        .expect("expected success");
     assert_eq!(resp.status, 200);
     assert!(resp.body.len() > 0, "body should not be empty");
     let content = resp.content.expect("content present");
-    assert!(content.contains("hello world"), "unexpected content: {content}");
+    assert!(
+        content.contains("hello world"),
+        "unexpected content: {content}"
+    );
     assert_eq!(resp.tier, Tier::T0);
     assert_eq!(resp.route_id.as_ref(), "local.http");
 }
@@ -77,7 +86,10 @@ async fn maps_404_to_status_error() {
     let ctx = AdapterContext::new(0);
     let cancel = CancelToken::new();
 
-    let err = adapter.execute(&route, &req, &ctx, &cancel).await.unwrap_err();
+    let err = adapter
+        .execute(&route, &req, &ctx, &cancel)
+        .await
+        .unwrap_err();
     match err {
         FetchError::Status(s) => assert_eq!(s, 404),
         other => panic!("expected Status(404), got {other:?}"),
@@ -99,7 +111,10 @@ async fn maps_503_to_retryable_status_error() {
     let ctx = AdapterContext::new(0);
     let cancel = CancelToken::new();
 
-    let err = adapter.execute(&route, &req, &ctx, &cancel).await.unwrap_err();
+    let err = adapter
+        .execute(&route, &req, &ctx, &cancel)
+        .await
+        .unwrap_err();
     assert!(err.is_retryable(), "503 should be retryable: {err:?}");
 }
 
@@ -122,7 +137,10 @@ async fn passes_custom_request_headers_through() {
     let ctx = AdapterContext::new(0);
     let cancel = CancelToken::new();
 
-    let resp = adapter.execute(&route, &req, &ctx, &cancel).await.expect("expected success");
+    let resp = adapter
+        .execute(&route, &req, &ctx, &cancel)
+        .await
+        .expect("expected success");
     assert_eq!(resp.status, 200);
 }
 
@@ -152,11 +170,20 @@ async fn cancel_token_aborts_slow_fetch() {
     let elapsed = started.elapsed();
 
     // Should bail out well before the 5s delay.
-    assert!(elapsed < Duration::from_secs(2), "cancel didn't propagate: {elapsed:?}");
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "cancel didn't propagate: {elapsed:?}"
+    );
     // The result is either Cancelled or a network/timeout error — either is acceptable
     // (depending on whether spider's crawl future was mid-flight when cancel fired).
     assert!(
-        matches!(result, Err(FetchError::Cancelled) | Err(FetchError::Network(_)) | Err(FetchError::Timeout(_)) | Err(FetchError::Status(_))),
+        matches!(
+            result,
+            Err(FetchError::Cancelled)
+                | Err(FetchError::Network(_))
+                | Err(FetchError::Timeout(_))
+                | Err(FetchError::Status(_))
+        ),
         "unexpected result: {result:?}"
     );
 }
@@ -177,6 +204,9 @@ async fn body_matches_html_bytes() {
     let ctx = AdapterContext::new(0);
     let cancel = CancelToken::new();
 
-    let resp = adapter.execute(&route, &req, &ctx, &cancel).await.expect("expected success");
+    let resp = adapter
+        .execute(&route, &req, &ctx, &cancel)
+        .await
+        .expect("expected success");
     assert_eq!(resp.body, Bytes::copy_from_slice(html.as_bytes()));
 }

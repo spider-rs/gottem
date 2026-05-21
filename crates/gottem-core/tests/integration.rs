@@ -7,9 +7,9 @@
 //! - Budget ceiling halts escalation (cost cap)
 //! - Outer CancelToken aborts in-flight fetches promptly
 
-use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -30,16 +30,30 @@ struct MockAdapter {
 }
 
 impl MockAdapter {
-    fn new() -> Arc<Self> { Arc::new(Self::default()) }
+    fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
 
     fn set(&self, id: &str, status: u16, body: &[u8]) {
-        self.behavior.lock().unwrap().insert(id.into(), (status, body.to_vec()));
+        self.behavior
+            .lock()
+            .unwrap()
+            .insert(id.into(), (status, body.to_vec()));
     }
 
     fn behavior_for(&self, id: &str) -> (u16, Vec<u8>) {
-        self.behavior.lock().unwrap()
-            .get(id).cloned()
-            .unwrap_or_else(|| (200, b"this is a long enough response to clear the min_bytes=500 validator. ".repeat(20)))
+        self.behavior
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| {
+                (
+                    200,
+                    b"this is a long enough response to clear the min_bytes=500 validator. "
+                        .repeat(20),
+                )
+            })
     }
 
     fn set_delay(&self, id: &str, ms: u64) {
@@ -47,14 +61,20 @@ impl MockAdapter {
     }
 
     fn delay_for(&self, id: &str) -> u64 {
-        self.delay_per_route.lock().unwrap().get(id).copied()
+        self.delay_per_route
+            .lock()
+            .unwrap()
+            .get(id)
+            .copied()
             .unwrap_or_else(|| self.delay_ms.load(Ordering::Relaxed) as u64)
     }
 }
 
 #[async_trait]
 impl Adapter for MockAdapter {
-    fn kind(&self) -> AdapterKind { AdapterKind::Custom(Arc::from("mock")) }
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::Custom(Arc::from("mock"))
+    }
 
     async fn execute(
         &self,
@@ -136,7 +156,11 @@ fn build(budget: u64) -> Harness {
         Arc::new(reg),
         Arc::new(Budget::new(budget)),
     ));
-    Harness { orch, catalog, mock }
+    Harness {
+        orch,
+        catalog,
+        mock,
+    }
 }
 
 fn ladder(catalog: Arc<RouteCatalog>, max_retries: u32) -> Arc<LadderStrategy> {
@@ -155,7 +179,8 @@ async fn ladder_succeeds_at_lowest_tier() {
     let strategy = ladder(h.catalog.clone(), 5);
 
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
-    let resp = h.orch
+    let resp = h
+        .orch
         .fetch_cheap(req, strategy, CancelToken::new())
         .await
         .expect("expected success");
@@ -170,7 +195,11 @@ async fn ladder_escalates_on_validation_failure() {
     h.mock.set("local.http", 200, b"tiny");
     let strategy = ladder(h.catalog.clone(), 5);
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
-    let resp = h.orch.fetch_cheap(req, strategy, CancelToken::new()).await.unwrap();
+    let resp = h
+        .orch
+        .fetch_cheap(req, strategy, CancelToken::new())
+        .await
+        .unwrap();
     assert_eq!(resp.tier, Tier::T4);
     assert!(h.mock.calls.load(Ordering::Relaxed) >= 2);
 }
@@ -182,7 +211,11 @@ async fn ladder_escalates_on_5xx_status() {
     h.mock.set("cloud.cheap", 503, b"upstream down");
     let strategy = ladder(h.catalog.clone(), 5);
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
-    let resp = h.orch.fetch_cheap(req, strategy, CancelToken::new()).await.unwrap();
+    let resp = h
+        .orch
+        .fetch_cheap(req, strategy, CancelToken::new())
+        .await
+        .unwrap();
     assert_eq!(resp.tier, Tier::T7);
 }
 
@@ -193,8 +226,15 @@ async fn budget_ceiling_blocks_escalation() {
     h.mock.set("cloud.cheap", 200, b"tiny");
     let strategy = ladder(h.catalog.clone(), 5);
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
-    let err = h.orch.fetch_cheap(req, strategy, CancelToken::new()).await.unwrap_err();
-    assert!(matches!(err, FetchError::BudgetExceeded { .. }), "got {err:?}");
+    let err = h
+        .orch
+        .fetch_cheap(req, strategy, CancelToken::new())
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, FetchError::BudgetExceeded { .. }),
+        "got {err:?}"
+    );
 }
 
 #[tokio::test]
@@ -203,14 +243,22 @@ async fn race_winner_cancels_losers() {
     h.mock.delay_ms.store(50, Ordering::Relaxed);
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
     let started = std::time::Instant::now();
-    let resp = h.orch
-        .fetch_race(req, &["local.http", "cloud.cheap", "cloud.smart"], CancelToken::new())
+    let resp = h
+        .orch
+        .fetch_race(
+            req,
+            &["local.http", "cloud.cheap", "cloud.smart"],
+            CancelToken::new(),
+        )
         .await
         .unwrap();
     let elapsed = started.elapsed();
     // All three start in parallel; first finishes in ~50ms.
     assert!(elapsed.as_millis() < 200, "race took too long: {elapsed:?}");
-    assert!(matches!(resp.route_id.as_ref(), "local.http" | "cloud.cheap" | "cloud.smart"));
+    assert!(matches!(
+        resp.route_id.as_ref(),
+        "local.http" | "cloud.cheap" | "cloud.smart"
+    ));
 }
 
 #[tokio::test]
@@ -226,13 +274,17 @@ async fn hedge_primary_wins_when_fast() {
         enabled: true,
     };
     let started = std::time::Instant::now();
-    let resp = h.orch
+    let resp = h
+        .orch
         .fetch_hedge(req, strategy, hedge_cfg, CancelToken::new())
         .await
         .expect("hedge fetch ok");
     let elapsed = started.elapsed();
     assert_eq!(resp.tier, Tier::T0, "primary T0 should win");
-    assert!(elapsed.as_millis() < 100, "primary should win fast: {elapsed:?}");
+    assert!(
+        elapsed.as_millis() < 100,
+        "primary should win fast: {elapsed:?}"
+    );
 }
 
 #[tokio::test]
@@ -248,14 +300,22 @@ async fn hedge_backup_wins_when_primary_slow() {
         enabled: true,
     };
     let started = std::time::Instant::now();
-    let resp = h.orch
+    let resp = h
+        .orch
         .fetch_hedge(req, strategy, hedge_cfg, CancelToken::new())
         .await
         .expect("hedge fetch ok");
     let elapsed = started.elapsed();
-    assert_eq!(resp.tier, Tier::T4, "hedge T4 should win when primary is slow");
+    assert_eq!(
+        resp.tier,
+        Tier::T4,
+        "hedge T4 should win when primary is slow"
+    );
     // Should NOT wait the full 500ms — hedge fires at ~30ms and wins quickly.
-    assert!(elapsed.as_millis() < 400, "hedge didn't accelerate the win: {elapsed:?}");
+    assert!(
+        elapsed.as_millis() < 400,
+        "hedge didn't accelerate the win: {elapsed:?}"
+    );
 }
 
 #[tokio::test]
@@ -268,7 +328,8 @@ async fn hedge_disabled_falls_back_to_cheap() {
         max_hedges: 1,
         enabled: false, // disabled — should run fetch_cheap path
     };
-    let resp = h.orch
+    let resp = h
+        .orch
         .fetch_hedge(req, strategy, hedge_cfg, CancelToken::new())
         .await
         .expect("hedge disabled still fetches");
@@ -290,7 +351,13 @@ async fn outer_cancel_token_aborts_fetch() {
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     cancel.cancel();
     let result = handle.await.unwrap();
-    assert!(matches!(result, Err(FetchError::Cancelled) | Err(FetchError::Exhausted)), "got {result:?}");
+    assert!(
+        matches!(
+            result,
+            Err(FetchError::Cancelled) | Err(FetchError::Exhausted)
+        ),
+        "got {result:?}"
+    );
 }
 
 #[tokio::test]
