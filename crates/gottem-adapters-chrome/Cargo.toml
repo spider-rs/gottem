@@ -1,6 +1,6 @@
 [package]
 name = "gottem-adapters-chrome"
-version = "0.1.2"
+version = "0.1.3"
 description = "gottem CDP adapter: connects to Chrome via WebSocket (Brightdata Scraping Browser, Browserless, Spider Browser Cloud, local Chrome)."
 readme = "README.md"
 edition.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core  = { path = "../gottem-core", version = "0.1.2" }
+gottem-core  = { path = "../gottem-core", version = "0.1.3" }
 # Enables spider's chrome feature, which re-exports chromiumoxide. Single chromiumoxide
 # build across the workspace, no duplication with gottem-adapters-spider.
 spider       = { workspace = true, features = ["basic", "chrome"] }
