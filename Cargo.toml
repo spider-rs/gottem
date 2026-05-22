@@ -36,7 +36,10 @@ dashmap    = "6"
 # Powerhouse: spider provides the RetryStrategy trait, HedgeTracker, AntiBotTech, RequestProxy.
 # We depend with default-features = false to keep gottem-core light — the heavy fetching
 # logic (Website, Client, basic feature stack) lives in gottem-adapters-spider, not core.
-spider = { path = "../spider/spider", default-features = false, features = ["serde", "hedge", "sync"] }
+# Published crates.io release so the workspace builds self-contained — no sibling
+# spider checkout needed (CI, Docker, fresh clones all just work). Caret range "2"
+# accepts any 2.x; we trust spider's semver within the major.
+spider = { version = "2", default-features = false, features = ["serde", "hedge", "sync"] }
 
 # Match spider's reqwest version so cargo doesn't unify two different majors. Core uses no
 # reqwest features; the http adapter crate enables what it needs (rustls, gzip, brotli, stream).
