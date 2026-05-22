@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/gottem-logo-github-dark.svg">
-    <img alt="gottem — universal scraper that always gets the data" src="assets/gottem-logo-github-light.svg" width="540">
+    <img alt="gottem — universal scraper" src="assets/gottem-logo-github-light.svg" width="540">
   </picture>
 </p>
 

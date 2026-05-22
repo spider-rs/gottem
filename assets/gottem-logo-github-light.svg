@@ -1,49 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" role="img" aria-label="gottem — universal scraper">
-  <title>gottem</title>
-  <defs>
-    <linearGradient id="tierGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"  stop-color="#10b981"/>
-      <stop offset="48%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#ef4444"/>
-    </linearGradient>
-    <linearGradient id="ringShade" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.12"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Mark: tier-gradient disc + checkmark = "got the data" -->
-  <g transform="translate(110,110)">
-    <!-- Outer tier ring (concentric, hints at T0 -> T9 escalation) -->
-    <circle r="86" fill="none" stroke="#0f172a" stroke-width="3" opacity="0.18"/>
-    <circle r="72" fill="none" stroke="#0f172a" stroke-width="3" opacity="0.28"/>
-    <circle r="58" fill="none" stroke="#0f172a" stroke-width="3" opacity="0.38"/>
-    <!-- Main disc -->
-    <circle r="44" fill="url(#tierGradient)"/>
-    <circle r="44" fill="url(#ringShade)"/>
-    <circle r="44" fill="none" stroke="#0f172a" stroke-width="5"/>
-    <!-- Checkmark: bold "got it" indicator -->
-    <path d="M -20 2 L -4 18 L 22 -14"
-          stroke="#0f172a"
-          stroke-width="9"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          fill="none"/>
-  </g>
-
-  <!-- Wordmark -->
-  <text x="220" y="148"
-        font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
-        font-size="124"
-        font-weight="900"
-        fill="#0f172a"
-        letter-spacing="-5">gottem</text>
-
-  <!-- Tagline -->
-  <text x="222" y="186"
-        font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-        font-size="18"
-        font-weight="500"
-        fill="#475569"
-        letter-spacing="2">UNIVERSAL · TIERED · ALWAYS GETS THE DATA</text>
+<svg width="107" height="25" viewBox="0 0 107 25" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2.76112 25V22.2694H0V19.2354H3.06454V21.966H11.0445V16.7779H2.76112V14.017H0V8.25243H2.76112V5.4915H11.3479V8.25243H14.109V22.2694H11.3479V25H2.76112ZM3.06454 13.7136H11.0445V8.52549H3.06454V13.7136Z" fill="#0f172a"/>
+<path d="M19.0142 19.5085V16.7779H16.2531V8.25243H19.0142V5.4915H27.5707V8.25243H30.3621V16.7779H27.5707V19.5085H19.0142ZM19.3176 16.4745H27.2672V8.52549H19.3176V16.4745Z" fill="#0f172a"/>
+<path d="M38.9167 19.5085V16.7779H36.1859V8.52549H33.4248V5.4915H36.1859V0H39.2201V5.4915H47.5338V8.52549H39.2201V16.4745H47.2304V13.7136H50.2949V16.7779H47.5338V19.5085H38.9167Z" fill="#0f172a"/>
+<path d="M56.7106 19.5085V16.7779H53.9798V8.52549H51.2187V5.4915H53.9798V0H57.014V5.4915H65.3277V8.52549H57.014V16.4745H65.0243V13.7136H68.0888V16.7779H65.3277V19.5085H56.7106Z" fill="#0f172a"/>
+<path d="M72.9885 19.5085V16.7779H70.2274V8.25243H72.9885V5.4915H81.545V8.25243H84.3364V11.2561H81.2416V8.52549H73.292V10.9527H78.8142V14.017H73.292V16.4745H81.2416V13.6833H84.3364V16.7476H81.545V19.5085H72.9885Z" fill="#0f172a"/>
+<path d="M87.3991 19.5085V5.4915H95.9859V8.25243H98.4132V5.4915H104.269V8.25243H107V19.5085H103.966V8.52549H98.7166V19.5085H95.6825V8.52549H90.4636V19.5085H87.3991Z" fill="url(#paint0_linear_2009_62)"/>
+<defs>
+<linearGradient id="paint0_linear_2009_62" x1="0" y1="12.5" x2="107" y2="12.5" gradientUnits="userSpaceOnUse">
+<stop offset="0.807692" stop-color="#55B788"/>
+<stop offset="1" stop-color="#616AE8"/>
+</linearGradient>
+</defs>
 </svg>
