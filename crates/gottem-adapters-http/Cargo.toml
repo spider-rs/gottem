@@ -1,6 +1,6 @@
 [package]
 name = "gottem-adapters-http"
-version = "0.1.1"
+version = "0.1.2"
 description = "gottem HTTP adapters: DirectHttp, HttpJson, HttpJsonlStream for cloud vendor APIs (Firecrawl, Spider Cloud, ZenRows, ScrapingBee, Zyte, Brightdata)."
 readme = "README.md"
 edition.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core = { path = "../gottem-core", version = "0.1.1" }
+gottem-core = { path = "../gottem-core", version = "0.1.2" }
 reqwest     = { workspace = true, features = ["rustls", "gzip", "brotli", "stream", "http2"] }
 async-trait = { workspace = true }
 bytes       = { workspace = true }

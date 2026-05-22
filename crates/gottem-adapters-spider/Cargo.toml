@@ -1,6 +1,6 @@
 [package]
 name = "gottem-adapters-spider"
-version = "0.1.1"
+version = "0.1.2"
 description = "gottem adapter that dispatches through spider::Website for full local power (T0-T3)."
 readme = "README.md"
 edition.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core = { path = "../gottem-core", version = "0.1.1" }
+gottem-core = { path = "../gottem-core", version = "0.1.2" }
 spider      = { workspace = true, features = ["basic"] }
 async-trait = { workspace = true }
 bytes       = { workspace = true }
