@@ -13,13 +13,13 @@ name = "gottem"
 path = "src/main.rs"
 
 [dependencies]
-gottem-core                = { path = "../gottem-core" }
-gottem-adapters-http       = { path = "../gottem-adapters-http" }
-gottem-adapters-spider     = { path = "../gottem-adapters-spider" }
-gottem-adapters-chrome     = { path = "../gottem-adapters-chrome", optional = true }
-gottem-adapters-captcha    = { path = "../gottem-adapters-captcha" }
-gottem-adapters-browseruse = { path = "../gottem-adapters-browseruse" }
-gottem-routes-builtin      = { path = "../gottem-routes-builtin", features = ["all"] }
+gottem-core                = { path = "../gottem-core", version = "0.1.0" }
+gottem-adapters-http       = { path = "../gottem-adapters-http", version = "0.1.0" }
+gottem-adapters-spider     = { path = "../gottem-adapters-spider", version = "0.1.0" }
+gottem-adapters-chrome     = { path = "../gottem-adapters-chrome", version = "0.1.0", optional = true }
+gottem-adapters-captcha    = { path = "../gottem-adapters-captcha", version = "0.1.0" }
+gottem-adapters-browseruse = { path = "../gottem-adapters-browseruse", version = "0.1.0" }
+gottem-routes-builtin      = { path = "../gottem-routes-builtin", version = "0.1.0", features = ["all"] }
 
 clap        = { version = "4", features = ["derive"] }
 tokio       = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }

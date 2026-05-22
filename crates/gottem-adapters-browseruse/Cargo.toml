@@ -9,7 +9,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core = { path = "../gottem-core" }
+gottem-core = { path = "../gottem-core", version = "0.1.0" }
 reqwest     = { workspace = true, features = ["rustls", "gzip", "brotli", "http2"] }
 async-trait = { workspace = true }
 bytes       = { workspace = true }

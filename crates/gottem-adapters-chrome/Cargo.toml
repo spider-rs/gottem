@@ -9,7 +9,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core  = { path = "../gottem-core" }
+gottem-core  = { path = "../gottem-core", version = "0.1.0" }
 # Enables spider's chrome feature, which re-exports chromiumoxide. Single chromiumoxide
 # build across the workspace, no duplication with gottem-adapters-spider.
 spider       = { workspace = true, features = ["basic", "chrome"] }
