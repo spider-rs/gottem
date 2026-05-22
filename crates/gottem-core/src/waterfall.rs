@@ -144,6 +144,22 @@ impl RouteDomainEntry {
         }
     }
 
+    /// Build an entry from persisted counters — used to seed warm state on
+    /// boot via [`WaterfallStats::seed_entry`].
+    pub fn from_parts(
+        successes: u64,
+        failures: u64,
+        ema_latency_ms: u64,
+        last_seen_ms: u64,
+    ) -> Self {
+        Self {
+            successes: AtomicU64::new(successes),
+            failures: AtomicU64::new(failures),
+            ema_latency_ms: AtomicU64::new(ema_latency_ms),
+            last_seen_ms: AtomicU64::new(last_seen_ms),
+        }
+    }
+
     pub fn success_count(&self) -> u64 {
         self.successes.load(Ordering::Relaxed)
     }
@@ -231,6 +247,33 @@ impl WaterfallStats {
     /// Direct access to the underlying DashMap.
     pub fn entries(&self) -> &DashMap<(RouteId, DomainKey), Arc<RouteDomainEntry>> {
         &self.entries
+    }
+
+    /// Seed a `(route, domain)` entry from persisted counters — used to warm
+    /// the waterfall on startup so routing intelligence survives a restart.
+    ///
+    /// A no-op if the pair already has a live entry (a running record always
+    /// wins over stale persisted state) or if the `max_entries` cap is full.
+    pub fn seed_entry(
+        &self,
+        route_id: RouteId,
+        domain: DomainKey,
+        successes: u64,
+        failures: u64,
+        ema_latency_ms: u64,
+        last_seen_ms: u64,
+    ) {
+        if self.entries.len() >= self.config.max_entries {
+            return;
+        }
+        self.entries.entry((route_id, domain)).or_insert_with(|| {
+            Arc::new(RouteDomainEntry::from_parts(
+                successes,
+                failures,
+                ema_latency_ms,
+                last_seen_ms,
+            ))
+        });
     }
 
     /// Record a successful fetch with its observed latency.
