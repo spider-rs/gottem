@@ -136,7 +136,7 @@ impl Adapter for BrowserUseAdapter {
         ctx: &AdapterContext,
         cancel: &CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
-        let api_key = resolve_api_key(&route.auth)?;
+        let api_key = resolve_api_key(&route.auth, req)?;
         let body = render_route_body(&route.body, req)?;
 
         let task_id = submit_task(&self.client, &self.base_url, &api_key, &body, cancel).await?;
@@ -156,13 +156,15 @@ impl Adapter for BrowserUseAdapter {
         )
         .await?;
 
-        let body_bytes = Bytes::copy_from_slice(output.as_bytes());
+        // Move the agent's output into a `Bytes` and share body+content — refcount bump
+        // on clone, no second allocation for the (sometimes large) markdown payload.
+        let body = Bytes::from(output.into_bytes());
         Ok(ScrapeResponse {
             url: req.url.clone(),
             status: 200,
             headers: vec![],
-            body: body_bytes,
-            content: Some(output),
+            body: body.clone(),
+            content: Some(body),
             route_id: route.id.clone(),
             tier: route.tier,
             cost_milli: route.cost,
@@ -179,11 +181,13 @@ impl Adapter for BrowserUseAdapter {
 // internals
 // ============================================================================
 
-fn resolve_api_key(auth: &AuthSpec) -> Result<String, FetchError> {
+/// Per-request resolver: BYOK keys live on `req.credentials` and shadow the
+/// process env. See [`ScrapeRequest::resolve_env`].
+fn resolve_api_key(auth: &AuthSpec, req: &ScrapeRequest) -> Result<String, FetchError> {
     match auth {
-        AuthSpec::Bearer { env } | AuthSpec::ApiKey { env, .. } => {
-            std::env::var(env).map_err(|_| FetchError::Auth(format!("missing env var: {env}")))
-        }
+        AuthSpec::Bearer { env } | AuthSpec::ApiKey { env, .. } => req
+            .resolve_env(env)
+            .ok_or_else(|| FetchError::Auth(format!("missing env var: {env}"))),
         other => Err(FetchError::Config(format!(
             "browser_use adapter expects AuthSpec::Bearer or ApiKey, got {other:?}"
         ))),

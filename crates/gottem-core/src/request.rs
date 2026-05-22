@@ -22,6 +22,15 @@ pub struct ScrapeRequest {
     pub required_caps: Capabilities,
     /// Free-form per-request hints passed through to adapters (e.g. chrome args).
     pub extra: HashMap<String, serde_json::Value>,
+    /// Per-request credential overrides keyed by env-var name (e.g.
+    /// `"SPIDER_CLOUD_API_KEY" → "sk-..."`). When an adapter resolves an
+    /// [`crate::AuthSpec`] env var or a `{{env:NAME}}` template, it consults
+    /// this map first and only falls back to [`std::env::var`] if the name
+    /// isn't present. This is how BYOK injects a user-supplied vendor key
+    /// without mutating the process environment (which would leak across
+    /// concurrent requests). Empty by default; populated by callers that
+    /// thread per-request credentials in (e.g. gottem-cloud's BYOK path).
+    pub credentials: HashMap<String, String>,
 }
 
 impl ScrapeRequest {
@@ -37,7 +46,27 @@ impl ScrapeRequest {
             geo: None,
             required_caps: Capabilities::default(),
             extra: HashMap::new(),
+            credentials: HashMap::new(),
         }
+    }
+
+    /// Look up an env-var name, preferring this request's [`credentials`]
+    /// override over the process environment. Used by every adapter's auth
+    /// resolver so BYOK keys scope to a single request.
+    ///
+    /// [`credentials`]: ScrapeRequest::credentials
+    pub fn resolve_env(&self, name: &str) -> Option<String> {
+        self.credentials
+            .get(name)
+            .cloned()
+            .or_else(|| std::env::var(name).ok())
+    }
+
+    /// Builder-style: attach a credential override map. Consumes and returns
+    /// `self` so it composes with the other `with_*` builders.
+    pub fn with_credentials(mut self, creds: HashMap<String, String>) -> Self {
+        self.credentials = creds;
+        self
     }
 
     pub fn with_required_caps(mut self, caps: Capabilities) -> Self {

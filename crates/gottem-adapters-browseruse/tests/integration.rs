@@ -85,7 +85,7 @@ async fn submit_then_poll_returns_output() {
         .await
         .expect("task resolves");
     assert_eq!(
-        resp.content.as_deref(),
+        resp.content_str(),
         Some("# example.com\n\nThe page content.")
     );
     // Output is the AI's final answer; we don't constrain its byte-for-byte shape, only

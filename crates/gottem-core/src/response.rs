@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -13,7 +14,12 @@ pub struct ScrapeResponse {
     pub headers: Vec<(String, String)>,
     pub body: Bytes,
     /// Parsed content per the route's `parse` spec (markdown, plain text, JSON field).
-    pub content: Option<String>,
+    ///
+    /// Stored as [`Bytes`] (not `String`) so the utf8-passthrough cases — `Html`,
+    /// `Markdown`, `RawText` — can share the **same allocation** as [`Self::body`]
+    /// via a refcount bump. Reading as `&str` is one cheap utf8 check on each call;
+    /// use [`Self::content_str`] / [`Self::content_str_lossy`] for that.
+    pub content: Option<Bytes>,
     pub route_id: RouteId,
     pub tier: Tier,
     /// Static cost from the route (milli-cents — 10 = $0.001). Always present.
@@ -36,8 +42,22 @@ impl ScrapeResponse {
     /// Length of the parsed content if present, otherwise raw body length.
     pub fn content_len(&self) -> usize {
         self.content
-            .as_deref()
-            .map(str::len)
+            .as_ref()
+            .map(Bytes::len)
             .unwrap_or(self.body.len())
+    }
+
+    /// Borrow [`Self::content`] as `&str`. Returns `None` when there is no content
+    /// **or** when the bytes aren't valid UTF-8 (e.g. a route that intentionally
+    /// emits binary content via `ResponseParse::RawBytes`).
+    pub fn content_str(&self) -> Option<&str> {
+        std::str::from_utf8(self.content.as_ref()?).ok()
+    }
+
+    /// Borrow [`Self::content`] as a UTF-8 string, replacing invalid sequences with
+    /// the replacement character. Cheaper than `to_string()`: yields `Cow::Borrowed`
+    /// when the bytes are already valid UTF-8.
+    pub fn content_str_lossy(&self) -> Option<Cow<'_, str>> {
+        self.content.as_ref().map(|b| String::from_utf8_lossy(b))
     }
 }

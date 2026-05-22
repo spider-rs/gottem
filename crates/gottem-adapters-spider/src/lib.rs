@@ -119,15 +119,17 @@ impl Adapter for SpiderAdapter {
             return Err(FetchError::Status(status));
         }
 
-        let html = page.get_html();
-        let body = Bytes::copy_from_slice(html.as_bytes());
+        // Move the page HTML into a `Bytes` (the String's allocation becomes the Bytes'
+        // buffer — no copy) and share it as both `body` and `content`. The clone is a
+        // refcount bump, not a memcpy — one allocation instead of two for large pages.
+        let body = Bytes::from(page.get_html().into_bytes());
 
         Ok(ScrapeResponse {
             url: final_url,
             status,
             headers: vec![],
-            body,
-            content: Some(html),
+            body: body.clone(),
+            content: Some(body),
             route_id: route.id.clone(),
             tier: route.tier,
             cost_milli: route.cost,

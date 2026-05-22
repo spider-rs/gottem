@@ -47,7 +47,7 @@ mod shared;
 pub use shared::build_default_client;
 
 use shared::{
-    apply_auth, extract_cost, parse_content, render_body, send_with_cancel, to_reqwest_method,
+    apply_auth, extract_content_and_cost, render_body, send_with_cancel, to_reqwest_method,
     HttpOutcome,
 };
 
@@ -103,7 +103,7 @@ impl Adapter for DirectHttpAdapter {
         for (k, v) in &req.headers {
             builder = builder.header(k.as_str(), v.as_str());
         }
-        builder = apply_auth(builder, &route.auth)?;
+        builder = apply_auth(builder, &route.auth, req)?;
 
         if let Some(body) = req.body.clone() {
             builder = builder.body(body);
@@ -113,8 +113,13 @@ impl Adapter for DirectHttpAdapter {
         if outcome.status >= 400 {
             return Err(FetchError::Status(outcome.status));
         }
-        let content = parse_content(&route.parse, &outcome.body)?;
-        Ok(response_from(route, req, ctx, outcome, content))
+        let (content, cost) = extract_content_and_cost(
+            &route.parse,
+            route.cost_extract.as_ref(),
+            &outcome.headers,
+            &outcome.body,
+        )?;
+        Ok(response_from(route, req, ctx, outcome, content, cost))
     }
 }
 
@@ -162,7 +167,7 @@ impl Adapter for HttpJsonAdapter {
         for (k, v) in &req.headers {
             builder = builder.header(k.as_str(), v.as_str());
         }
-        builder = apply_auth(builder, &route.auth)?;
+        builder = apply_auth(builder, &route.auth, req)?;
 
         if let Some(body) = render_body(&route.body, req)? {
             builder = builder.body(body);
@@ -172,8 +177,13 @@ impl Adapter for HttpJsonAdapter {
         if outcome.status >= 400 {
             return Err(FetchError::Status(outcome.status));
         }
-        let content = parse_content(&route.parse, &outcome.body)?;
-        Ok(response_from(route, req, ctx, outcome, content))
+        let (content, cost) = extract_content_and_cost(
+            &route.parse,
+            route.cost_extract.as_ref(),
+            &outcome.headers,
+            &outcome.body,
+        )?;
+        Ok(response_from(route, req, ctx, outcome, content, cost))
     }
 }
 
@@ -224,7 +234,7 @@ impl Adapter for HttpJsonlStreamAdapter {
         for (k, v) in &req.headers {
             builder = builder.header(k.as_str(), v.as_str());
         }
-        builder = apply_auth(builder, &route.auth)?;
+        builder = apply_auth(builder, &route.auth, req)?;
 
         if let Some(body) = render_body(&route.body, req)? {
             builder = builder.body(body);
@@ -234,16 +244,15 @@ impl Adapter for HttpJsonlStreamAdapter {
         if outcome.status >= 400 {
             return Err(FetchError::Status(outcome.status));
         }
-        // Force jsonl_first parse semantics regardless of what the route says. If the route
-        // declared something else, fall back to that — but the canonical case for this adapter
-        // is JsonlFirst.
-        let content = match &route.parse {
-            gottem_core::ResponseParse::JsonlFirst { .. } => {
-                parse_content(&route.parse, &outcome.body)?
-            }
-            other => parse_content(other, &outcome.body)?,
-        };
-        Ok(response_from(route, req, ctx, outcome, content))
+        // The canonical parse for this adapter is JsonlFirst, but we honor whatever the
+        // route declared — extract_content_and_cost dispatches on route.parse directly.
+        let (content, cost) = extract_content_and_cost(
+            &route.parse,
+            route.cost_extract.as_ref(),
+            &outcome.headers,
+            &outcome.body,
+        )?;
+        Ok(response_from(route, req, ctx, outcome, content, cost))
     }
 }
 
@@ -252,16 +261,15 @@ fn response_from(
     req: &ScrapeRequest,
     ctx: &AdapterContext,
     outcome: HttpOutcome,
-    content: Option<String>,
+    content: Option<bytes::Bytes>,
+    cost: Option<(f64, String)>,
 ) -> ScrapeResponse {
-    // Try to read per-request cost from the vendor's response per the route's spec.
-    // Missing data (header absent, JSON path miss, malformed) is normal — fall through
-    // to None.
-    let (actual_units, actual_unit) =
-        match extract_cost(route.cost_extract.as_ref(), &outcome.headers, &outcome.body) {
-            Some((n, u)) => (Some(n), Some(u)),
-            None => (None, None),
-        };
+    // Per-request cost was extracted alongside content in one JSON parse. Missing data
+    // (header absent, JSON path miss, malformed) is normal — it arrives here as None.
+    let (actual_units, actual_unit) = match cost {
+        Some((n, u)) => (Some(n), Some(u)),
+        None => (None, None),
+    };
     ScrapeResponse {
         url: req.url.clone(),
         status: outcome.status,

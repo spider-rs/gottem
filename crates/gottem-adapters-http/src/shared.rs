@@ -43,23 +43,29 @@ pub fn to_reqwest_method(m: HttpMethod) -> Method {
     }
 }
 
-/// Apply [`AuthSpec`] to a `RequestBuilder`. Reads credentials from environment variables
-/// declared in the route. Missing env vars surface as [`FetchError::Auth`].
-pub fn apply_auth(builder: RequestBuilder, auth: &AuthSpec) -> Result<RequestBuilder, FetchError> {
+/// Apply [`AuthSpec`] to a `RequestBuilder`. Resolves env-var names through
+/// [`ScrapeRequest::resolve_env`] — the request's `credentials` override is
+/// preferred over [`std::env::var`], which is what makes BYOK keys scope to
+/// a single request instead of leaking through the process environment.
+/// Missing values surface as [`FetchError::Auth`].
+pub fn apply_auth(
+    builder: RequestBuilder,
+    auth: &AuthSpec,
+    req: &ScrapeRequest,
+) -> Result<RequestBuilder, FetchError> {
+    let resolve = |env: &str| -> Result<String, FetchError> {
+        req.resolve_env(env)
+            .ok_or_else(|| FetchError::Auth(format!("missing env var: {env}")))
+    };
     match auth {
         AuthSpec::None => Ok(builder),
-        AuthSpec::Bearer { env } => {
-            let token = std::env::var(env)
-                .map_err(|_| FetchError::Auth(format!("missing env var: {env}")))?;
-            Ok(builder.bearer_auth(token))
-        }
+        AuthSpec::Bearer { env } => Ok(builder.bearer_auth(resolve(env)?)),
         AuthSpec::ApiKey {
             header,
             prefix,
             env,
         } => {
-            let raw = std::env::var(env)
-                .map_err(|_| FetchError::Auth(format!("missing env var: {env}")))?;
+            let raw = resolve(env)?;
             let value = match prefix.as_deref() {
                 Some(p) => format!("{p}{raw}"),
                 None => raw,
@@ -67,13 +73,9 @@ pub fn apply_auth(builder: RequestBuilder, auth: &AuthSpec) -> Result<RequestBui
             Ok(builder.header(header.as_str(), value))
         }
         AuthSpec::Basic { user_env, pass_env } => {
-            let user = std::env::var(user_env)
-                .map_err(|_| FetchError::Auth(format!("missing env var: {user_env}")))?;
+            let user = resolve(user_env)?;
             let pass = match pass_env.as_deref() {
-                Some(p) => Some(
-                    std::env::var(p)
-                        .map_err(|_| FetchError::Auth(format!("missing env var: {p}")))?,
-                ),
+                Some(p) => Some(resolve(p)?),
                 None => None,
             };
             Ok(builder.basic_auth(user, pass))
@@ -101,42 +103,85 @@ pub fn render_body(body: &BodyTemplate, req: &ScrapeRequest) -> Result<Option<By
     }
 }
 
-/// Parse the upstream response according to the route's [`ResponseParse`] spec.
+/// Parse content **and** extract cost from one response, deserializing the body's JSON
+/// **at most once** — a `JsonPath` parse spec paired with a `JsonPath`/`JsonlFirst` cost
+/// spec used to deserialize the same bytes twice.
 ///
-/// Returns the extracted content as a string (or None for `RawBytes`). For `JsonPath`
-/// and `JsonlFirst`, drills into the parsed JSON at a dotted-path like `$.data.markdown`
-/// or `$.results[0].html` (converted to RFC 6901 JSON Pointer internally).
-pub fn parse_content(parse: &ResponseParse, body: &[u8]) -> Result<Option<String>, FetchError> {
-    use serde_json::Value;
+/// Content-parse failures are hard errors (the caller explicitly asked for that field);
+/// cost-extract failures collapse to `None` — missing cost data is normal, never fatal.
+pub fn extract_content_and_cost(
+    parse: &ResponseParse,
+    cost: Option<&CostExtract>,
+    headers: &[(String, String)],
+    body: &Bytes,
+) -> Result<(Option<Bytes>, Option<(f64, String)>), FetchError> {
+    // Build only the JSON views the two specs actually need, each exactly once.
+    let need_full = matches!(parse, ResponseParse::JsonPath { .. })
+        || matches!(cost, Some(CostExtract::JsonPath { .. }));
+    let need_first = matches!(parse, ResponseParse::JsonlFirst { .. })
+        || matches!(cost, Some(CostExtract::JsonlFirst { .. }));
+
+    let full = if need_full { parse_full_json(body) } else { None };
+    let first = if need_first { parse_first_record(body) } else { None };
+
+    let content = parse_content_with(parse, body, full.as_ref(), first.as_ref())?;
+    let cost_out = extract_cost_with(cost, headers, full.as_ref(), first.as_ref());
+    Ok((content, cost_out))
+}
+
+/// Parse content per the [`ResponseParse`] spec, over already-deserialized JSON views —
+/// `full` for `JsonPath`, `first` for `JsonlFirst`. A `None` view for a JSON spec means
+/// the body wasn't valid JSON.
+///
+/// Returns the extracted content as [`Bytes`] (or None for `RawBytes`). For the
+/// utf8-passthrough variants the returned Bytes is a **refcount-bumped clone of
+/// `body`** — no second copy of large HTML pages. For `JsonPath` and `JsonlFirst`
+/// the returned Bytes is a fresh small allocation holding the extracted field.
+fn parse_content_with(
+    parse: &ResponseParse,
+    body: &Bytes,
+    full: Option<&serde_json::Value>,
+    first: Option<&serde_json::Value>,
+) -> Result<Option<Bytes>, FetchError> {
     match parse {
         ResponseParse::RawText | ResponseParse::Html | ResponseParse::Markdown => {
-            Ok(Some(String::from_utf8_lossy(body).into_owned()))
+            // Share the body's allocation — clone is a refcount bump, not a memcpy.
+            Ok(Some(body.clone()))
         }
         ResponseParse::RawBytes => Ok(None),
         ResponseParse::JsonPath { path } => {
-            let v: Value = serde_json::from_slice(body)
-                .map_err(|e| FetchError::Parse(format!("json: {e}")))?;
+            let v = full
+                .ok_or_else(|| FetchError::Parse("json: response body is not valid JSON".into()))?;
             let ptr = dotted_to_pointer(path);
-            value_at(&v, &ptr)
-                .map(Some)
+            value_at(v, &ptr)
+                .map(|s| Some(Bytes::from(s.into_bytes())))
                 .ok_or_else(|| FetchError::Parse(format!("no value at path {path}")))
         }
         ResponseParse::JsonlFirst { path } => {
-            let line = first_jsonl_record(body)
-                .ok_or_else(|| FetchError::Parse("no JSON line in JSONL body".into()))?;
-            let parsed: Value = serde_json::from_slice(line)
-                .map_err(|e| FetchError::Parse(format!("jsonl line: {e}")))?;
-            // Spider Cloud sometimes wraps the record as a single-element array.
-            let target = match &parsed {
-                Value::Array(arr) => arr.first().cloned().unwrap_or(Value::Null),
-                _ => parsed,
-            };
+            let v = first
+                .ok_or_else(|| FetchError::Parse("no valid JSON line in JSONL body".into()))?;
             let ptr = dotted_to_pointer(path);
-            value_at(&target, &ptr)
-                .map(Some)
+            value_at(v, &ptr)
+                .map(|s| Some(Bytes::from(s.into_bytes())))
                 .ok_or_else(|| FetchError::Parse(format!("no value at path {path}")))
         }
     }
+}
+
+/// Deserialize the whole body as one JSON document. `None` on malformed input.
+fn parse_full_json(body: &[u8]) -> Option<serde_json::Value> {
+    serde_json::from_slice(body).ok()
+}
+
+/// Deserialize the first JSONL record, unwrapping a single-element array wrapper
+/// (Spider Cloud sometimes wraps the record). `None` if no parseable record is found.
+fn parse_first_record(body: &[u8]) -> Option<serde_json::Value> {
+    let line = first_jsonl_record(body)?;
+    let parsed: serde_json::Value = serde_json::from_slice(line).ok()?;
+    Some(match parsed {
+        serde_json::Value::Array(arr) => arr.into_iter().next().unwrap_or(serde_json::Value::Null),
+        other => other,
+    })
 }
 
 /// Race a request future against the [`CancelToken`]. Returns Cancelled on outer cancel,
@@ -178,10 +223,18 @@ pub async fn send_with_cancel(
 /// spec. Returns `(value, unit_label)` on success; `None` when the spec is absent or the
 /// vendor didn't include the expected field this time. Never panics, never errors —
 /// missing cost data is normal and shouldn't block a successful response.
-pub fn extract_cost(
+/// Extract per-request cost from the vendor's response per the route's [`CostExtract`]
+/// spec, over already-deserialized JSON views — `full` for `JsonPath`, `first` for
+/// `JsonlFirst`. Shares one parse with [`parse_content_with`] via [`extract_content_and_cost`].
+///
+/// Returns `(value, unit_label)` on success; `None` when the spec is absent or the vendor
+/// didn't include the expected field. Never panics, never errors — missing cost data is
+/// normal and shouldn't block a successful response.
+fn extract_cost_with(
     spec: Option<&CostExtract>,
     headers: &[(String, String)],
-    body: &[u8],
+    full: Option<&serde_json::Value>,
+    first: Option<&serde_json::Value>,
 ) -> Option<(f64, String)> {
     let spec = spec?;
     match spec {
@@ -206,33 +259,12 @@ pub fn extract_cost(
             path,
             unit,
             multiplier,
-        } => {
-            let v: serde_json::Value = serde_json::from_slice(body).ok()?;
-            extract_f64_at_path(&v, path).map(|n| (n * multiplier, unit.clone()))
-        }
+        } => extract_f64_at_path(full?, path).map(|n| (n * multiplier, unit.clone())),
         CostExtract::JsonlFirst {
             path,
             unit,
             multiplier,
-        } => {
-            for line in body.split(|&b| b == b'\n') {
-                let trimmed = trim_ws(line);
-                if trimmed.is_empty() || !matches!(trimmed[0], b'{' | b'[') {
-                    continue;
-                }
-                if let Ok(parsed) = serde_json::from_slice::<serde_json::Value>(trimmed) {
-                    let target = match &parsed {
-                        serde_json::Value::Array(arr) => {
-                            arr.first().cloned().unwrap_or(serde_json::Value::Null)
-                        }
-                        _ => parsed,
-                    };
-                    return extract_f64_at_path(&target, path)
-                        .map(|n| (n * multiplier, unit.clone()));
-                }
-            }
-            None
-        }
+        } => extract_f64_at_path(first?, path).map(|n| (n * multiplier, unit.clone())),
     }
 }
 
@@ -352,13 +384,21 @@ mod tests {
         assert_eq!(line, br#"{"content":"hello"}"#);
     }
 
+    /// Run just the content side of [`extract_content_and_cost`] (no cost spec),
+    /// returning the extracted content as a `String` for cheap equality assertions.
+    fn parse_only(parse: &ResponseParse, body: &[u8]) -> Result<Option<String>, FetchError> {
+        let body = Bytes::copy_from_slice(body);
+        extract_content_and_cost(parse, None, &[], &body)
+            .map(|(content, _)| content.map(|b| String::from_utf8(b.to_vec()).unwrap()))
+    }
+
     #[test]
     fn parse_content_jsonpath_extracts_field() {
         let body = br##"{"data":{"markdown":"# heading"}}"##;
         let parse = ResponseParse::JsonPath {
             path: "$.data.markdown".into(),
         };
-        let out = parse_content(&parse, body).unwrap().unwrap();
+        let out = parse_only(&parse, body).unwrap().unwrap();
         assert_eq!(out, "# heading");
     }
 
@@ -368,7 +408,7 @@ mod tests {
         let parse = ResponseParse::JsonlFirst {
             path: "$.content".into(),
         };
-        let out = parse_content(&parse, body).unwrap().unwrap();
+        let out = parse_only(&parse, body).unwrap().unwrap();
         assert_eq!(out, "line one");
     }
 
@@ -378,7 +418,40 @@ mod tests {
         let parse = ResponseParse::JsonlFirst {
             path: "$.content".into(),
         };
-        let out = parse_content(&parse, body).unwrap().unwrap();
+        let out = parse_only(&parse, body).unwrap().unwrap();
         assert_eq!(out, "wrapped");
+    }
+
+    #[test]
+    fn html_passthrough_content_shares_body_allocation() {
+        // For `Html`/`Markdown`/`RawText` the returned content Bytes must be the
+        // *same* underlying buffer as `body` — same data ptr and same len means it's
+        // a refcount-bumped clone, not a fresh copy. This is the core memory win:
+        // large HTML pages exist in memory exactly once.
+        let body = Bytes::from(b"<html>hello world</html>".to_vec());
+        let (content, _) =
+            extract_content_and_cost(&ResponseParse::Html, None, &[], &body).unwrap();
+        let content = content.expect("html parse always produces content");
+        assert_eq!(content.as_ptr(), body.as_ptr(), "expected shared buffer");
+        assert_eq!(content.len(), body.len());
+    }
+
+    #[test]
+    fn json_body_parsed_once_for_content_and_cost() {
+        // A JsonPath parse spec + JsonPath cost spec both drill into the same body —
+        // extract_content_and_cost deserializes it a single time and feeds both.
+        let body = Bytes::from_static(br##"{"data":{"markdown":"# hi"},"meta":{"credits":3}}"##);
+        let parse = ResponseParse::JsonPath {
+            path: "$.data.markdown".into(),
+        };
+        let cost = CostExtract::JsonPath {
+            path: "$.meta.credits".into(),
+            unit: "credits".into(),
+            multiplier: 2.0,
+        };
+        let (content, cost_out) =
+            extract_content_and_cost(&parse, Some(&cost), &[], &body).unwrap();
+        assert_eq!(content.unwrap().as_ref(), b"# hi");
+        assert_eq!(cost_out, Some((6.0, "credits".into())));
     }
 }

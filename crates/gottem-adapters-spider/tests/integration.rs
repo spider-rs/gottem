@@ -62,7 +62,7 @@ async fn fetches_200_html_and_returns_content() {
         .expect("expected success");
     assert_eq!(resp.status, 200);
     assert!(!resp.body.is_empty(), "body should not be empty");
-    let content = resp.content.expect("content present");
+    let content = resp.content_str().expect("content present and valid utf8");
     assert!(
         content.contains("hello world"),
         "unexpected content: {content}"
@@ -230,7 +230,7 @@ async fn body_preserves_original_content() {
         body_str.contains(needle),
         "body did not contain the original payload; got: {body_str}"
     );
-    let content = resp.content.as_deref().expect("content present");
+    let content = resp.content_str().expect("content present");
     assert!(
         content.contains(needle),
         "content did not contain the original payload"

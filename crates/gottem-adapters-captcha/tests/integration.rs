@@ -99,7 +99,7 @@ async fn submit_then_poll_resolves_token() {
         .expect("captcha solved");
 
     assert_eq!(
-        resp.content.as_deref(),
+        resp.content_str(),
         Some("SOLVED-TOKEN-PAYLOAD-very-long-string-of-base64-or-similar-data")
     );
     assert_eq!(resp.tier, Tier::T9);

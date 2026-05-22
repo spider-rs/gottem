@@ -216,7 +216,7 @@ impl Orchestrator {
             {
                 Ok(resp) => {
                     if let Some(reason) =
-                        validate(&route_for_attempt, &resp.body, resp.content.as_deref())
+                        validate(&route_for_attempt, &resp.body, resp.content_str())
                     {
                         last_status = Some(resp.status);
                         last_html_length = resp.body.len();
@@ -328,7 +328,7 @@ impl Orchestrator {
         if routes.len() == 1 {
             let only = routes.pop().expect("non-empty");
             let resp = self.execute_once(&only, &req, 0, &cancel).await?;
-            if let Some(reason) = validate(&only, &resp.body, resp.content.as_deref()) {
+            if let Some(reason) = validate(&only, &resp.body, resp.content_str()) {
                 return Err(FetchError::Validation(reason));
             }
             return Ok(resp);
@@ -375,7 +375,7 @@ impl Orchestrator {
                 Ok(resp) => {
                     // Validate against the route's declared validators before declaring victory.
                     if let Some(route) = self.catalog.get(&resp.route_id) {
-                        if let Some(reason) = validate(&route, &resp.body, resp.content.as_deref())
+                        if let Some(reason) = validate(&route, &resp.body, resp.content_str())
                         {
                             last_err = Some(FetchError::Validation(reason));
                             continue;
@@ -440,7 +440,7 @@ impl Orchestrator {
                     race_cancel.cancel();
                     // Validate before declaring winner.
                     if let Some(route) = self.catalog.get(&resp.route_id) {
-                        if let Some(reason) = validate(&route, &resp.body, resp.content.as_deref())
+                        if let Some(reason) = validate(&route, &resp.body, resp.content_str())
                         {
                             last_err = Some(FetchError::Validation(reason));
                             // Reset cancel so still-pending tasks get a chance (rare edge case).

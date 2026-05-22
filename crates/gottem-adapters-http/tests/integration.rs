@@ -56,7 +56,7 @@ async fn direct_http_get_returns_raw_text() {
         .await
         .unwrap();
     assert_eq!(resp.status, 200);
-    assert_eq!(resp.content.as_deref(), Some("<html>hello</html>"));
+    assert_eq!(resp.content_str(), Some("<html>hello</html>"));
 }
 
 #[tokio::test]
@@ -137,7 +137,7 @@ async fn http_json_substitutes_url_and_extracts_jsonpath() {
         .await
         .unwrap();
     assert_eq!(resp.status, 200);
-    assert_eq!(resp.content.as_deref(), Some("# Title"));
+    assert_eq!(resp.content_str(), Some("# Title"));
 }
 
 #[tokio::test]
@@ -168,7 +168,7 @@ async fn http_json_bearer_auth_sets_authorization_header() {
         .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
         .await
         .unwrap();
-    assert_eq!(resp.content.as_deref(), Some("ok"));
+    assert_eq!(resp.content_str(), Some("ok"));
 }
 
 #[tokio::test]
@@ -199,7 +199,7 @@ async fn http_json_api_key_auth_with_prefix() {
         .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
         .await
         .unwrap();
-    assert_eq!(resp.content.as_deref(), Some("y"));
+    assert_eq!(resp.content_str(), Some("y"));
 }
 
 #[tokio::test]
@@ -257,7 +257,7 @@ async fn jsonl_stream_takes_first_record() {
         .await
         .unwrap();
     assert_eq!(
-        resp.content.as_deref(),
+        resp.content_str(),
         Some("first record body that we care about")
     );
 }
@@ -287,7 +287,7 @@ async fn jsonl_stream_unwraps_single_element_array() {
         .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
         .await
         .unwrap();
-    assert_eq!(resp.content.as_deref(), Some("wrapped record"));
+    assert_eq!(resp.content_str(), Some("wrapped record"));
 }
 
 // ---- Cancellation -----------------------------------------------------------

@@ -24,7 +24,7 @@ pub fn render_endpoint(template: &str, req: &ScrapeRequest) -> Result<String, Fe
     }
     let s = template.replace("{{url}}", &percent_encode(req.url.as_str()));
     let s = s.replace("{{method}}", req.method.as_str());
-    substitute_env(&s, /* encode = */ true)
+    substitute_env(&s, /* encode = */ true, req)
 }
 
 /// Render a body template — placeholders are NOT encoded.
@@ -35,7 +35,7 @@ pub fn render_body(template: &str, req: &ScrapeRequest) -> Result<String, FetchE
     }
     let s = template.replace("{{url}}", req.url.as_str());
     let s = s.replace("{{method}}", req.method.as_str());
-    substitute_env(&s, /* encode = */ false)
+    substitute_env(&s, /* encode = */ false, req)
 }
 
 /// Whether a template string contains any `{{...}}` placeholder.
@@ -45,7 +45,10 @@ pub fn has_placeholder(template: &str) -> bool {
 
 // ---- internals --------------------------------------------------------------
 
-fn substitute_env(s: &str, encode: bool) -> Result<String, FetchError> {
+/// `{{env:NAME}}` resolves via [`ScrapeRequest::resolve_env`] — the per-request
+/// credential override beats process env, so BYOK keys scope to one request
+/// instead of leaking through the process-global env table.
+fn substitute_env(s: &str, encode: bool, req: &ScrapeRequest) -> Result<String, FetchError> {
     if !s.contains("{{env:") {
         return Ok(s.to_string());
     }
@@ -58,8 +61,9 @@ fn substitute_env(s: &str, encode: bool) -> Result<String, FetchError> {
             .find("}}")
             .ok_or_else(|| FetchError::Config("unterminated {{env:...}}".into()))?;
         let env_name = &after_start[..end];
-        let val = std::env::var(env_name)
-            .map_err(|_| FetchError::Auth(format!("missing env var: {env_name}")))?;
+        let val = req
+            .resolve_env(env_name)
+            .ok_or_else(|| FetchError::Auth(format!("missing env var: {env_name}")))?;
         if encode {
             out.push_str(&percent_encode(&val));
         } else {
@@ -153,5 +157,41 @@ mod tests {
     fn unterminated_env_placeholder_errors() {
         let err = render_body("hello {{env:NOPE", &req("https://x/")).unwrap_err();
         assert!(matches!(err, FetchError::Config(_)));
+    }
+
+    #[test]
+    fn request_credentials_override_process_env() {
+        // Process env has one value; the request supplies another. The request
+        // wins — this is the BYOK contract: per-request keys never touch the
+        // process environment.
+        std::env::set_var("GOTTEM_TPL_CRED_OVERRIDE", "from-env");
+        let mut r = req("https://example.com/");
+        r.credentials
+            .insert("GOTTEM_TPL_CRED_OVERRIDE".into(), "from-request".into());
+        let out =
+            render_body(r#"{"token":"{{env:GOTTEM_TPL_CRED_OVERRIDE}}"}"#, &r).unwrap();
+        assert_eq!(out, r#"{"token":"from-request"}"#);
+    }
+
+    #[test]
+    fn request_credentials_supply_missing_env() {
+        // Env is unset; only the request provides the value. Without the
+        // override the render would error with FetchError::Auth.
+        std::env::remove_var("GOTTEM_TPL_CRED_ONLY");
+        let mut r = req("https://example.com/");
+        r.credentials
+            .insert("GOTTEM_TPL_CRED_ONLY".into(), "only-here".into());
+        let out =
+            render_body(r#"{"token":"{{env:GOTTEM_TPL_CRED_ONLY}}"}"#, &r).unwrap();
+        assert_eq!(out, r#"{"token":"only-here"}"#);
+    }
+
+    #[test]
+    fn missing_env_and_no_override_is_auth_error() {
+        std::env::remove_var("GOTTEM_TPL_CRED_ABSENT");
+        let err =
+            render_body(r#"{"k":"{{env:GOTTEM_TPL_CRED_ABSENT}}"}"#, &req("https://x/"))
+                .unwrap_err();
+        assert!(matches!(err, FetchError::Auth(_)), "got {err:?}");
     }
 }

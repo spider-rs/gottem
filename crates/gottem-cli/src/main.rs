@@ -174,24 +174,27 @@ struct ProbeArgs {
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let setup = build_setup(cli.config.as_deref())?;
+    let config = cli.config.as_deref();
     match cli.command {
-        Cmd::Fetch(args) => run_fetch(args, setup).await,
-        Cmd::Probe(args) => run_probe(args, setup).await,
-        Cmd::Routes { action } => run_routes(action, setup),
+        Cmd::Fetch(args) => run_fetch(args, config).await,
+        Cmd::Probe(args) => run_probe(args, config).await,
+        Cmd::Routes { action } => run_routes(action, config),
     }
 }
 
 // ============================================================================
-// setup: catalog + adapters
+// setup: catalog + adapters — built lazily, per command
 // ============================================================================
+//
+// Each builder is invoked only by the commands that actually need it: `routes`
+// reads the catalog and never touches a network client; `fetch --remote` runs on
+// the hosted API and builds neither catalog nor adapters. Constructing the adapter
+// stack eagerly for every subcommand wasted a full `spider::Client` (UA generator,
+// TLS config) plus a reqwest client on `routes list` and `--remote` invocations.
 
-struct Setup {
-    catalog: Arc<RouteCatalog>,
-    adapters: Arc<AdapterRegistry>,
-}
-
-fn build_setup(config_path: Option<&std::path::Path>) -> Result<Setup> {
+/// Load the route catalog: builtin routes layered with an optional user TOML.
+/// This is all the `routes` subcommands need — no HTTP/spider clients constructed.
+fn build_catalog(config_path: Option<&std::path::Path>) -> Result<Arc<RouteCatalog>> {
     let mut builder = RouteCatalogBuilder::new();
     builder = gottem_routes_builtin::register_all(builder)
         .map_err(|e| anyhow!("loading builtin routes: {e}"))?;
@@ -202,8 +205,13 @@ fn build_setup(config_path: Option<&std::path::Path>) -> Result<Setup> {
             .add_toml(&toml)
             .map_err(|e| anyhow!("parsing user routes from {}: {e}", path.display()))?;
     }
-    let catalog = Arc::new(builder.build());
+    Ok(Arc::new(builder.build()))
+}
 
+/// Construct the adapter stack. Eagerly builds a shared `reqwest::Client` and a
+/// `spider::Client`, so this runs only for commands that actually dispatch routes
+/// locally (`fetch` without `--remote`, and `probe`).
+fn build_adapters() -> Arc<AdapterRegistry> {
     // One shared reqwest::Client across every HTTP-flavored adapter — one connection
     // pool, one DNS cache, one TLS session cache for the whole gottem stack. Spider
     // and Chrome have their own underlying clients (spider::Website + chromiumoxide),
@@ -224,21 +232,21 @@ fn build_setup(config_path: Option<&std::path::Path>) -> Result<Setup> {
         gottem_adapters_browseruse::BrowserUseAdapter::arc_with_client(shared_http_client),
     );
 
-    Ok(Setup {
-        catalog,
-        adapters: Arc::new(registry),
-    })
+    Arc::new(registry)
 }
 
 // ============================================================================
 // fetch
 // ============================================================================
 
-async fn run_fetch(args: FetchArgs, setup: Setup) -> Result<()> {
-    // --remote: hand the fetch to the hosted API instead of running locally.
+async fn run_fetch(args: FetchArgs, config_path: Option<&std::path::Path>) -> Result<()> {
+    // --remote: hand the fetch to the hosted API instead of running locally. Nothing
+    // local is built — no catalog, no adapters, no spider/reqwest client.
     if args.remote {
         return run_fetch_remote(args).await;
     }
+    let catalog = build_catalog(config_path)?;
+    let adapters = build_adapters();
     let url = Url::parse(&args.url).with_context(|| format!("invalid URL: {}", args.url))?;
     let tier_min = Tier::from_u8(args.tier_min).map_err(|e| anyhow!(e))?;
     let tier_max = Tier::from_u8(args.tier_max).map_err(|e| anyhow!(e))?;
@@ -250,8 +258,8 @@ async fn run_fetch(args: FetchArgs, setup: Setup) -> Result<()> {
 
     let budget = Arc::new(Budget::new(args.budget_mc));
     let orch = Arc::new(Orchestrator::new(
-        setup.catalog.clone(),
-        setup.adapters.clone(),
+        catalog.clone(),
+        adapters.clone(),
         budget.clone(),
     ));
     let cancel = install_signal_handler();
@@ -260,7 +268,7 @@ async fn run_fetch(args: FetchArgs, setup: Setup) -> Result<()> {
     let resp = match args.mode {
         Mode::Ladder => {
             let strategy = Arc::new(LadderStrategy::new(
-                setup.catalog.clone(),
+                catalog.clone(),
                 tier_min,
                 tier_max,
                 req.required_caps,
@@ -272,8 +280,7 @@ async fn run_fetch(args: FetchArgs, setup: Setup) -> Result<()> {
             let ids: Vec<String> = if !args.routes.is_empty() {
                 args.routes.clone()
             } else {
-                setup
-                    .catalog
+                catalog
                     .at_tier(tier_min)
                     .iter()
                     .map(|r| r.id.to_string())
@@ -287,7 +294,7 @@ async fn run_fetch(args: FetchArgs, setup: Setup) -> Result<()> {
         }
         Mode::Hedge => {
             let strategy = Arc::new(LadderStrategy::new(
-                setup.catalog.clone(),
+                catalog.clone(),
                 tier_min,
                 tier_max,
                 req.required_caps,
@@ -308,7 +315,7 @@ async fn run_fetch(args: FetchArgs, setup: Setup) -> Result<()> {
             if args.show_meta {
                 emit_meta_stderr(&resp, elapsed, budget.spent());
             }
-            if let Some(c) = &resp.content {
+            if let Some(c) = resp.content_str() {
                 print!("{c}");
             }
         }
@@ -320,8 +327,8 @@ async fn run_fetch(args: FetchArgs, setup: Setup) -> Result<()> {
                 "tier": u8::from(resp.tier),
                 "cost_milli": resp.cost_milli,
                 "elapsed_ms": elapsed.as_millis() as u64,
-                "content_bytes": resp.content.as_deref().map(str::len).unwrap_or(resp.body.len()),
-                "content": resp.content,
+                "content_bytes": resp.content_len(),
+                "content": resp.content_str_lossy(),
                 "budget_spent_milli": budget.spent(),
             });
             println!("{v}");
@@ -337,7 +344,7 @@ fn emit_meta_stderr(resp: &ScrapeResponse, elapsed: std::time::Duration, budget_
         route = resp.route_id,
         cost = fmt_cost(resp.cost_milli),
         status = resp.status,
-        bytes = resp.content.as_deref().map(str::len).unwrap_or(resp.body.len()),
+        bytes = resp.content_len(),
         ms = elapsed.as_millis(),
         spent = fmt_cost(budget_spent),
     );
@@ -415,15 +422,17 @@ async fn run_fetch_remote(args: FetchArgs) -> Result<()> {
 // probe
 // ============================================================================
 
-async fn run_probe(args: ProbeArgs, setup: Setup) -> Result<()> {
+async fn run_probe(args: ProbeArgs, config_path: Option<&std::path::Path>) -> Result<()> {
+    let catalog = build_catalog(config_path)?;
+    let adapters = build_adapters();
     let url = Url::parse(&args.url).with_context(|| format!("invalid URL: {}", args.url))?;
     let tier_min = Tier::from_u8(args.tier_min).map_err(|e| anyhow!(e))?;
     let tier_max = Tier::from_u8(args.tier_max).map_err(|e| anyhow!(e))?;
 
     let req = ScrapeRequest::get(url.clone());
     let orch = Arc::new(Orchestrator::new(
-        setup.catalog.clone(),
-        setup.adapters.clone(),
+        catalog.clone(),
+        adapters.clone(),
         Arc::new(Budget::unlimited()),
     ));
     let cancel = install_signal_handler();
@@ -435,7 +444,7 @@ async fn run_probe(args: ProbeArgs, setup: Setup) -> Result<()> {
         if (tier as u8) < (tier_min as u8) || (tier as u8) > (tier_max as u8) {
             continue;
         }
-        for route in setup.catalog.at_tier(tier) {
+        for route in catalog.at_tier(tier) {
             print!(
                 "  [T{tier_n}] {id} (${cost}) ... ",
                 tier_n = u8::from(tier),
@@ -448,21 +457,17 @@ async fn run_probe(args: ProbeArgs, setup: Setup) -> Result<()> {
             let started = Instant::now();
             match orch.execute_once(route, &req, 0, &cancel).await {
                 Ok(resp) => {
-                    let bytes = resp
-                        .content
-                        .as_deref()
-                        .map(str::len)
-                        .unwrap_or(resp.body.len());
+                    let bytes = resp.content_len();
                     let elapsed = started.elapsed();
                     let validators_ok = route
                         .validate
                         .iter()
-                        .all(|v| v.check(&resp.body, resp.content.as_deref()).is_ok())
+                        .all(|v| v.check(&resp.body, resp.content_str()).is_ok())
                         && bytes >= args.min_bytes;
                     if validators_ok {
                         println!("OK — {bytes} bytes ({}ms)", elapsed.as_millis());
                         if args.preview {
-                            if let Some(c) = &resp.content {
+                            if let Some(c) = resp.content_str() {
                                 let prev: String =
                                     c.chars().take(200).collect::<String>().replace('\n', " ");
                                 println!("         preview: {prev}…");
@@ -506,11 +511,12 @@ async fn run_probe(args: ProbeArgs, setup: Setup) -> Result<()> {
 // routes list / validate / show
 // ============================================================================
 
-fn run_routes(action: RoutesAction, setup: Setup) -> Result<()> {
+fn run_routes(action: RoutesAction, config_path: Option<&std::path::Path>) -> Result<()> {
+    let catalog = build_catalog(config_path)?;
     match action {
-        RoutesAction::List => routes_list(&setup.catalog),
-        RoutesAction::Validate => routes_validate(&setup.catalog),
-        RoutesAction::Show { id } => routes_show(&setup.catalog, &id),
+        RoutesAction::List => routes_list(&catalog),
+        RoutesAction::Validate => routes_validate(&catalog),
+        RoutesAction::Show { id } => routes_show(&catalog, &id),
     }
 }
 

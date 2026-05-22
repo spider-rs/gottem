@@ -127,13 +127,15 @@ impl Adapter for ChromeCdpAdapter {
             return Err(FetchError::Status(status));
         }
 
-        let body = Bytes::copy_from_slice(html.as_bytes());
+        // Move the page HTML into a `Bytes` and share it as both body and content —
+        // refcount bump on clone, no second copy of the (potentially large) HTML.
+        let body = Bytes::from(html.into_bytes());
         Ok(ScrapeResponse {
             url: req.url.clone(),
             status,
             headers: vec![],
-            body,
-            content: Some(html),
+            body: body.clone(),
+            content: Some(body),
             route_id: route.id.clone(),
             tier: route.tier,
             cost_milli: route.cost,
@@ -180,8 +182,11 @@ pub(crate) fn build_ws_url(route: &Route, req: &ScrapeRequest) -> Result<String,
     let mut url = route.endpoint.render(req)?;
 
     if let AuthSpec::WsUserinfo { env } = &route.auth {
-        let userinfo =
-            std::env::var(env).map_err(|_| FetchError::Auth(format!("missing env var: {env}")))?;
+        // Per-request resolver — BYOK keys shadow the process env for CDP
+        // websocket userinfo just like for HTTP bearer auth.
+        let userinfo = req
+            .resolve_env(env)
+            .ok_or_else(|| FetchError::Auth(format!("missing env var: {env}")))?;
         let (user, pass) = match userinfo.split_once(':') {
             Some((u, p)) => (u.to_string(), Some(p.to_string())),
             None => (userinfo, None),

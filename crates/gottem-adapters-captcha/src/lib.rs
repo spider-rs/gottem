@@ -158,7 +158,7 @@ impl Adapter for Captcha2CaptchaAdapter {
         ctx: &AdapterContext,
         cancel: &CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
-        let api_key = resolve_api_key(&route.auth)?;
+        let api_key = resolve_api_key(&route.auth, req)?;
         let challenge = Challenge::from_request(req)?;
 
         let task_id =
@@ -179,13 +179,15 @@ impl Adapter for Captcha2CaptchaAdapter {
         )
         .await?;
 
-        let body = Bytes::copy_from_slice(token.as_bytes());
+        // Token strings are small, but share body/content anyway — keeps the adapter
+        // consistent with the rest of the stack (one allocation, refcount bump on clone).
+        let body = Bytes::from(token.into_bytes());
         Ok(ScrapeResponse {
             url: req.url.clone(),
             status: 200,
             headers: vec![],
-            body,
-            content: Some(token),
+            body: body.clone(),
+            content: Some(body),
             route_id: route.id.clone(),
             tier: route.tier,
             cost_milli: route.cost,
@@ -292,11 +294,13 @@ impl Challenge {
     }
 }
 
-fn resolve_api_key(auth: &AuthSpec) -> Result<String, FetchError> {
+/// Per-request resolver: BYOK keys live on `req.credentials` and shadow the
+/// process env. See [`ScrapeRequest::resolve_env`].
+fn resolve_api_key(auth: &AuthSpec, req: &ScrapeRequest) -> Result<String, FetchError> {
     match auth {
-        AuthSpec::Bearer { env } | AuthSpec::ApiKey { env, .. } => {
-            std::env::var(env).map_err(|_| FetchError::Auth(format!("missing env var: {env}")))
-        }
+        AuthSpec::Bearer { env } | AuthSpec::ApiKey { env, .. } => req
+            .resolve_env(env)
+            .ok_or_else(|| FetchError::Auth(format!("missing env var: {env}"))),
         other => Err(FetchError::Config(format!(
             "captcha solver expects AuthSpec::Bearer or ApiKey, got {other:?}"
         ))),
