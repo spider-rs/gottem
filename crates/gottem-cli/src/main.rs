@@ -358,8 +358,8 @@ async fn run_fetch_remote(args: FetchArgs) -> Result<()> {
         .as_deref()
         .filter(|k| !k.is_empty())
         .context("--remote needs an API key — pass --api-key or set GOTTEM_API_KEY")?;
-    let base = std::env::var("GOTTEM_API_URL")
-        .unwrap_or_else(|_| "https://api.gottem.dev".to_string());
+    let base =
+        std::env::var("GOTTEM_API_URL").unwrap_or_else(|_| "https://api.gottem.dev".to_string());
     let mode = match args.mode {
         Mode::Ladder => "ladder",
         Mode::Race => "race",
