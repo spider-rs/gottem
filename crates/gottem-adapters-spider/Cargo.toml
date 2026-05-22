@@ -2,6 +2,7 @@
 name = "gottem-adapters-spider"
 version = "0.1.0"
 description = "gottem adapter that dispatches through spider::Website for full local power (T0-T3)."
+readme = "README.md"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

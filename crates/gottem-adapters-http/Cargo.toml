@@ -2,6 +2,7 @@
 name = "gottem-adapters-http"
 version = "0.1.0"
 description = "gottem HTTP adapters: DirectHttp, HttpJson, HttpJsonlStream for cloud vendor APIs (Firecrawl, Spider Cloud, ZenRows, ScrapingBee, Zyte, Brightdata)."
+readme = "README.md"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

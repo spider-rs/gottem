@@ -2,6 +2,7 @@
 name = "gottem-adapters-captcha"
 version = "0.1.0"
 description = "gottem CAPTCHA solver adapter. 2Captcha submit-then-poll protocol exposed as an Adapter — composable with the rest of the gottem ladder."
+readme = "README.md"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

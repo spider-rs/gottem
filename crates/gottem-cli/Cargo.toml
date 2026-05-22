@@ -2,6 +2,7 @@
 name        = "gottem-cli"
 version     = "0.1.0"
 description = "gottem CLI: universal scraper that always gets the data."
+readme      = "README.md"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

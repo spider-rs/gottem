@@ -2,6 +2,7 @@
 name = "gottem-adapters-chrome"
 version = "0.1.0"
 description = "gottem CDP adapter: connects to Chrome via WebSocket (Brightdata Scraping Browser, Browserless, Spider Browser Cloud, local Chrome)."
+readme = "README.md"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

@@ -2,6 +2,7 @@
 name = "gottem-routes-builtin"
 version = "0.1.0"
 description = "Built-in vendor route catalogs for gottem. Each vendor is a feature flag; routes ship as embedded TOML and load into a gottem RouteCatalogBuilder."
+readme = "README.md"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

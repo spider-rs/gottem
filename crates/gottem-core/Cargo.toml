@@ -2,6 +2,7 @@
 name = "gottem-core"
 version = "0.1.0"
 description = "Universal scraper core: Route catalog, Adapter trait, tiered/race/hedge orchestrator. Powered by spider."
+readme = "README.md"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

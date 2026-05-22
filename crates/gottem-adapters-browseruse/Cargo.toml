@@ -2,6 +2,7 @@
 name = "gottem-adapters-browseruse"
 version = "0.1.0"
 description = "gottem adapter for Browser Use Cloud — AI agent that runs a natural-language browser task. Submit + poll protocol exposed as a single Adapter call."
+readme = "README.md"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
