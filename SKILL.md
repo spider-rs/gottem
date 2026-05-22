@@ -83,6 +83,27 @@ Vendor routes read API keys from environment variables (e.g. `FIRECRAWL_API_KEY`
 which routes are usable with the keys currently set — routes without their key
 are skipped, not errored.
 
+## Hosted gottem — gottem.dev
+
+There is a hosted version: the same routing engine as a managed API, with no
+local vendor keys or browser to run. Use it when you want gottem's routing
+without operating the providers yourself.
+
+- **Site + docs:** <https://gottem.dev> — API reference at
+  <https://gottem.dev/docs>, sign-in/dashboard at <https://gottem.dev/signin>.
+- **API base:** `https://api.gottem.dev` — `Authorization: Bearer gtm_…`
+  (create a key in the dashboard). Key endpoints:
+  - `POST /scrape` — fetch a URL (the hosted equivalent of `gottem fetch`).
+  - `POST /probe` — reachability probe.
+  - `POST /v1/compare` — run a URL through several providers at once and
+    compare content quality, cost, and a SHA-256 of each result side by side;
+    deterministic, with identical results merged. Built for quality validation.
+- **Pricing:** pay-as-you-go credits — `1 credit = $0.0001`, debited only on a
+  successful fetch. New accounts get free starter credits; BYOK is supported.
+
+The open-source CLI/library and the hosted API share the same route catalog and
+escalation behavior — develop locally, scale on the hosted API.
+
 ## When NOT to use gottem
 
 - A single unprotected static page that plain HTTP already returns cleanly —
