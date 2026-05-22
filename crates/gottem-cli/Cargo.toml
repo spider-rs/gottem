@@ -1,7 +1,7 @@
 [package]
 name        = "gottem-cli"
 version     = "0.1.2"
-description = "gottem CLI: universal scraper that always gets the data."
+description = "gottem CLI: universal scraper that reliably gets the data."
 readme      = "README.md"
 edition.workspace = true
 license.workspace = true
@@ -22,11 +22,13 @@ gottem-adapters-captcha    = { path = "../gottem-adapters-captcha", version = "0
 gottem-adapters-browseruse = { path = "../gottem-adapters-browseruse", version = "0.1.2" }
 gottem-routes-builtin      = { path = "../gottem-routes-builtin", version = "0.1.2", features = ["all"] }
 
-clap        = { version = "4", features = ["derive"] }
+clap        = { version = "4", features = ["derive", "env"] }
 tokio       = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
 url         = { workspace = true }
 serde_json  = { workspace = true }
 anyhow      = "1"
+# --remote mode: call the hosted API at api.gottem.dev.
+reqwest     = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [features]
 default = ["chrome"]

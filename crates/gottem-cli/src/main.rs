@@ -1,4 +1,4 @@
-//! gottem CLI — universal scraper that always gets the data.
+//! gottem CLI — universal scraper that reliably gets the data.
 //!
 //! Subcommands:
 //!   gottem fetch <url>            — cheapest-first ladder (default), escalates on failure
@@ -10,7 +10,7 @@
 #![forbid(unsafe_code)]
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -30,7 +30,7 @@ use url::Url;
 #[command(
     name = "gottem",
     version,
-    about = "Universal scraper that always gets the data. Tiered ladder across vendors with race + budget.",
+    about = "Universal scraper that reliably gets the data. Tiered ladder across vendors with race + budget.",
     long_about = None,
 )]
 struct Cli {
@@ -117,6 +117,15 @@ struct FetchArgs {
     /// Print tier / route / cost / elapsed metadata to stderr before content.
     #[arg(long)]
     show_meta: bool,
+
+    /// Run against the hosted gottem API (api.gottem.dev) instead of executing
+    /// the route ladder locally. Needs an API key (--api-key or GOTTEM_API_KEY).
+    #[arg(long)]
+    remote: bool,
+
+    /// gottem API key (`gtm_…`) for --remote. Falls back to $GOTTEM_API_KEY.
+    #[arg(long, env = "GOTTEM_API_KEY", hide_env_values = true)]
+    api_key: Option<String>,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
@@ -226,6 +235,10 @@ fn build_setup(config_path: Option<&std::path::Path>) -> Result<Setup> {
 // ============================================================================
 
 async fn run_fetch(args: FetchArgs, setup: Setup) -> Result<()> {
+    // --remote: hand the fetch to the hosted API instead of running locally.
+    if args.remote {
+        return run_fetch_remote(args).await;
+    }
     let url = Url::parse(&args.url).with_context(|| format!("invalid URL: {}", args.url))?;
     let tier_min = Tier::from_u8(args.tier_min).map_err(|e| anyhow!(e))?;
     let tier_max = Tier::from_u8(args.tier_max).map_err(|e| anyhow!(e))?;
@@ -328,6 +341,74 @@ fn emit_meta_stderr(resp: &ScrapeResponse, elapsed: std::time::Duration, budget_
         ms = elapsed.as_millis(),
         spent = fmt_cost(budget_spent),
     );
+}
+
+/// One process-wide `reqwest::Client` for `--remote` calls — built once, so
+/// the connection pool / DNS cache / TLS sessions are reused.
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(reqwest::Client::new)
+}
+
+/// `gottem fetch --remote` — run the fetch on the hosted API (api.gottem.dev)
+/// instead of the local ladder. The same flags map onto the request body.
+async fn run_fetch_remote(args: FetchArgs) -> Result<()> {
+    let key = args
+        .api_key
+        .as_deref()
+        .filter(|k| !k.is_empty())
+        .context("--remote needs an API key — pass --api-key or set GOTTEM_API_KEY")?;
+    let base = std::env::var("GOTTEM_API_URL")
+        .unwrap_or_else(|_| "https://api.gottem.dev".to_string());
+    let mode = match args.mode {
+        Mode::Ladder => "ladder",
+        Mode::Race => "race",
+        Mode::Hedge => "hedge",
+    };
+    let mut body = serde_json::json!({
+        "url": args.url,
+        "mode": mode,
+        "require_js": args.require_js,
+        "tier_min": args.tier_min,
+        "tier_max": args.tier_max,
+        "budget_mc": args.budget_mc,
+    });
+    if !args.routes.is_empty() {
+        body["routes"] = serde_json::json!(args.routes);
+    }
+
+    let resp = http_client()
+        .post(format!("{base}/scrape"))
+        .header("authorization", format!("Bearer {key}"))
+        .json(&body)
+        .send()
+        .await
+        .context("request to the gottem API")?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    if !status.is_success() {
+        anyhow::bail!("gottem API returned {status}: {text}");
+    }
+    let parsed: serde_json::Value =
+        serde_json::from_str(&text).context("parsing the gottem API response")?;
+
+    match args.format {
+        Format::Json => println!("{text}"),
+        Format::Content => {
+            if args.show_meta {
+                eprintln!(
+                    "route={} provider={} tier={} elapsed_ms={} credits_charged={}",
+                    parsed["route"].as_str().unwrap_or("—"),
+                    parsed["provider"].as_str().unwrap_or("—"),
+                    parsed["tier"],
+                    parsed["elapsed_ms"],
+                    parsed["credits_charged"],
+                );
+            }
+            println!("{}", parsed["content"].as_str().unwrap_or(""));
+        }
+    }
+    Ok(())
 }
 
 // ============================================================================

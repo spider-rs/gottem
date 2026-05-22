@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <em>Universal scraper that always gets the data.</em>
+  <em>Universal scraper that reliably gets the data.</em>
 </p>
 
 ---
@@ -245,6 +245,34 @@ gottem routes validate       # check that every route's env var is set
 ```
 
 `routes validate` exits 0 when every env var is present, exits 2 with a list otherwise — handy in CI.
+
+---
+
+## Hosted gottem — gottem.dev
+
+Don't want to manage vendor keys or run a browser? The same engine runs as a
+managed API at **[gottem.dev](https://gottem.dev)**. Sign up, create a `gtm_`
+key, and call it over HTTP — no keys to wrangle, pay-as-you-go credits.
+
+```bash
+# Hosted equivalent of `gottem fetch <url>` — gottem picks the route,
+# escalates as needed, returns clean content + which route served it.
+curl -X POST https://api.gottem.dev/scrape \
+  -H "Authorization: Bearer gtm_your_key_here" \
+  -H "content-type: application/json" \
+  -d '{"url": "https://example.com"}'
+
+# Hosted equivalent of `gottem probe` — but it runs every provider and
+# compares quality, cost, and content side by side. Great for picking a route.
+curl -X POST https://api.gottem.dev/v1/compare \
+  -H "Authorization: Bearer gtm_your_key_here" \
+  -H "content-type: application/json" \
+  -d '{"url": "https://example.com"}'
+```
+
+The CLI and the hosted API share the same route catalog and escalation logic —
+prototype locally with this crate, run production traffic on the hosted API.
+Full reference: **[gottem.dev/docs](https://gottem.dev/docs)**.
 
 ---
 

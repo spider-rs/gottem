@@ -1,6 +1,6 @@
 # gottem-cli
 
-The `gottem` command-line binary: a universal scraper that always gets the data.
+The `gottem` command-line binary: a universal scraper that reliably gets the data.
 
 ## What it does
 
