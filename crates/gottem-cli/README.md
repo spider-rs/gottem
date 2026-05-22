@@ -53,6 +53,25 @@ gottem probe https://hard-to-scrape.test
 gottem --config routes.toml fetch https://example.com
 ```
 
+## Run on the hosted API — `--remote`
+
+Don't want to manage vendor keys or run a browser? Point the CLI at the hosted
+API ([gottem.dev](https://gottem.dev)) with `--remote` — same flags, run on
+`api.gottem.dev`:
+
+```bash
+export GOTTEM_API_KEY=gtm_your_key_here   # create a key at gottem.dev
+
+gottem fetch --remote https://example.com
+gottem fetch --remote --mode race --show-meta https://example.com
+gottem fetch --remote --format json https://example.com
+
+# Or pass the key explicitly:
+gottem fetch --remote --api-key gtm_your_key_here https://example.com
+```
+
+`$GOTTEM_API_URL` overrides the base URL (default `https://api.gottem.dev`).
+
 ## Part of gottem
 
 The CLI of the [gottem](https://github.com/spider-rs/gottem) workspace.

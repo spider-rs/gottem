@@ -252,18 +252,40 @@ gottem routes validate       # check that every route's env var is set
 
 Don't want to manage vendor keys or run a browser? The same engine runs as a
 managed API at **[gottem.dev](https://gottem.dev)**. Sign up, create a `gtm_`
-key, and call it over HTTP — no keys to wrangle, pay-as-you-go credits.
+key, and call it — no keys to wrangle, pay-as-you-go credits.
+
+### From the CLI — `--remote`
+
+The `gottem` CLI can run any fetch against the hosted API instead of the local
+ladder. Set your key once and add `--remote`:
 
 ```bash
-# Hosted equivalent of `gottem fetch <url>` — gottem picks the route,
-# escalates as needed, returns clean content + which route served it.
+export GOTTEM_API_KEY=gtm_your_key_here
+
+# Runs on api.gottem.dev — no local vendor keys, no browser.
+gottem fetch --remote https://example.com
+
+# All the usual flags carry over to the hosted run.
+gottem fetch --remote --mode race --show-meta https://example.com
+gottem fetch --remote --format json https://example.com
+
+# Or pass the key explicitly instead of the env var.
+gottem fetch --remote --api-key gtm_your_key_here https://example.com
+```
+
+`$GOTTEM_API_URL` overrides the base URL (defaults to `https://api.gottem.dev`).
+
+### From any HTTP client
+
+```bash
+# Hosted equivalent of `gottem fetch <url>`.
 curl -X POST https://api.gottem.dev/scrape \
   -H "Authorization: Bearer gtm_your_key_here" \
   -H "content-type: application/json" \
   -d '{"url": "https://example.com"}'
 
-# Hosted equivalent of `gottem probe` — but it runs every provider and
-# compares quality, cost, and content side by side. Great for picking a route.
+# /v1/compare — runs every provider and compares quality, cost, and content
+# side by side. Great for picking a route.
 curl -X POST https://api.gottem.dev/v1/compare \
   -H "Authorization: Bearer gtm_your_key_here" \
   -H "content-type: application/json" \

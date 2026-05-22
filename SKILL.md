@@ -101,8 +101,21 @@ without operating the providers yourself.
 - **Pricing:** pay-as-you-go credits — `1 credit = $0.0001`, debited only on a
   successful fetch. New accounts get free starter credits; BYOK is supported.
 
-The open-source CLI/library and the hosted API share the same route catalog and
-escalation behavior — develop locally, scale on the hosted API.
+### Drive the hosted API from the CLI
+
+The `gottem` CLI can run a fetch on the hosted API instead of locally — add
+`--remote` and supply a key:
+
+```sh
+export GOTTEM_API_KEY=gtm_...
+gottem fetch --remote <URL>                 # runs on api.gottem.dev
+gottem fetch --remote --mode race <URL>     # the usual flags carry over
+```
+
+The key comes from `--api-key` or `$GOTTEM_API_KEY`; `$GOTTEM_API_URL`
+overrides the base URL. The open-source CLI/library and the hosted API share
+the same route catalog and escalation behavior — develop locally, scale on the
+hosted API.
 
 ## When NOT to use gottem
 
