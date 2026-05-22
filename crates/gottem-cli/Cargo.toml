@@ -1,6 +1,6 @@
 [package]
 name        = "gottem-cli"
-version     = "0.1.0"
+version     = "0.1.1"
 description = "gottem CLI: universal scraper that always gets the data."
 readme      = "README.md"
 edition.workspace = true
@@ -14,13 +14,13 @@ name = "gottem"
 path = "src/main.rs"
 
 [dependencies]
-gottem-core                = { path = "../gottem-core", version = "0.1.0" }
-gottem-adapters-http       = { path = "../gottem-adapters-http", version = "0.1.0" }
-gottem-adapters-spider     = { path = "../gottem-adapters-spider", version = "0.1.0" }
-gottem-adapters-chrome     = { path = "../gottem-adapters-chrome", version = "0.1.0", optional = true }
-gottem-adapters-captcha    = { path = "../gottem-adapters-captcha", version = "0.1.0" }
-gottem-adapters-browseruse = { path = "../gottem-adapters-browseruse", version = "0.1.0" }
-gottem-routes-builtin      = { path = "../gottem-routes-builtin", version = "0.1.0", features = ["all"] }
+gottem-core                = { path = "../gottem-core", version = "0.1.1" }
+gottem-adapters-http       = { path = "../gottem-adapters-http", version = "0.1.1" }
+gottem-adapters-spider     = { path = "../gottem-adapters-spider", version = "0.1.1" }
+gottem-adapters-chrome     = { path = "../gottem-adapters-chrome", version = "0.1.1", optional = true }
+gottem-adapters-captcha    = { path = "../gottem-adapters-captcha", version = "0.1.1" }
+gottem-adapters-browseruse = { path = "../gottem-adapters-browseruse", version = "0.1.1" }
+gottem-routes-builtin      = { path = "../gottem-routes-builtin", version = "0.1.1", features = ["all"] }
 
 clap        = { version = "4", features = ["derive"] }
 tokio       = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
