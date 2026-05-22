@@ -117,13 +117,6 @@ overrides the base URL. The open-source CLI/library and the hosted API share
 the same route catalog and escalation behavior — develop locally, scale on the
 hosted API.
 
-## When NOT to use gottem
-
-- A single unprotected static page that plain HTTP already returns cleanly —
-  `curl` is fine.
-- Crawling an entire site (gottem fetches single pages) — use `spider` directly
-  for multi-page crawls.
-
 ## License
 
 Apache-2.0 OR MIT.
