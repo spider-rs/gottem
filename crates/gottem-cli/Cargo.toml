@@ -1,6 +1,6 @@
 [package]
 name        = "gottem-cli"
-version     = "0.1.7"
+version     = "0.1.8"
 description = "gottem CLI: universal scraper that reliably gets the data."
 readme      = "README.md"
 edition.workspace = true

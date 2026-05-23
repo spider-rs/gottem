@@ -126,6 +126,25 @@ struct FetchArgs {
     /// gottem API key (`gtm_…`) for --remote. Falls back to $GOTTEM_API_KEY.
     #[arg(long, env = "GOTTEM_API_KEY", hide_env_values = true)]
     api_key: Option<String>,
+
+    /// Output formats to request from the hosted API (comma-separated).
+    /// Each value maps onto a `gottem_core::Format`. Server runs
+    /// `spider_transformations` after the orchestrator returns and packs
+    /// one payload per format into `content_by_format` on the response.
+    ///
+    /// Only honored with `--remote` today — local mode doesn't yet run the
+    /// transform pipeline.
+    ///
+    /// Valid values: `markdown`, `html`, `text`, `screenshot`.
+    #[arg(long = "formats", value_delimiter = ',')]
+    content_formats: Vec<String>,
+
+    /// Populate the `links` response field with absolute URLs scraped from
+    /// the page's `<a href>` anchors (sorted + deduped). Mirrors
+    /// spider_service's `return_page_links` — links sit beside the content,
+    /// not inside `content_by_format`. `--remote` only.
+    #[arg(long = "return-links")]
+    return_links: bool,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
@@ -383,6 +402,22 @@ async fn run_fetch_remote(args: FetchArgs) -> Result<()> {
     if !args.routes.is_empty() {
         body["routes"] = serde_json::json!(args.routes);
     }
+    if !args.content_formats.is_empty() {
+        // Lowercase + trim per element — server parses against `Format` with
+        // a lowercase-rename serde, and unknown values are silently dropped
+        // (forward-compat). Sending them lowercased keeps the wire shape
+        // canonical.
+        let normalized: Vec<String> = args
+            .content_formats
+            .iter()
+            .map(|f| f.trim().to_lowercase())
+            .filter(|f| !f.is_empty())
+            .collect();
+        body["formats"] = serde_json::json!(normalized);
+    }
+    if args.return_links {
+        body["return_links"] = serde_json::json!(true);
+    }
 
     let resp = http_client()
         .post(format!("{base}/scrape"))
@@ -412,7 +447,31 @@ async fn run_fetch_remote(args: FetchArgs) -> Result<()> {
                     parsed["credits_charged"],
                 );
             }
-            println!("{}", parsed["content"].as_str().unwrap_or(""));
+            // Multi-format response: print each format under a labelled
+            // header so the caller can pipe one stream into a file with
+            // `tee`/`sed`. Single-format / legacy responses keep their
+            // current behaviour — just `content` to stdout.
+            if let Some(by_format) = parsed.get("content_by_format").and_then(|v| v.as_object()) {
+                for (fmt, value) in by_format {
+                    println!("--- {fmt} ---");
+                    println!("{}", value.as_str().unwrap_or(""));
+                }
+            } else {
+                println!("{}", parsed["content"].as_str().unwrap_or(""));
+            }
+            // Links sit alongside the content payloads (spider_service
+            // convention); emit them after when present so piping `--format
+            // content` to a file gets the URLs at the tail.
+            if let Some(links) = parsed.get("links").and_then(|v| v.as_array()) {
+                if !links.is_empty() {
+                    eprintln!("--- links ({}) ---", links.len());
+                    for link in links {
+                        if let Some(s) = link.as_str() {
+                            println!("{s}");
+                        }
+                    }
+                }
+            }
         }
     }
     Ok(())
