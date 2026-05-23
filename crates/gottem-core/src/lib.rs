@@ -69,7 +69,7 @@ pub use catalog::{RouteCatalog, RouteCatalogBuilder};
 pub use circuit::CircuitBreaker;
 pub use error::FetchError;
 pub use orchestrator::{Mode, Orchestrator};
-pub use request::{HttpMethod, ScrapeRequest};
+pub use request::{Format, HttpMethod, ScrapeRequest};
 pub use response::ScrapeResponse;
 pub use retry::{
     AttemptOutcome, LadderStrategy, RetryDirective, RetryStrategy, SpiderStrategyAdapter,

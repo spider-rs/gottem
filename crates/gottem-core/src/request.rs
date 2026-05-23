@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -6,6 +6,28 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::capabilities::Capabilities;
+
+/// Output format the caller wants for a scraped page. Multi-format requests
+/// supply a set; gottem-cloud's transform pipeline produces one byte payload
+/// per requested format (vendor-native where possible, server-side via
+/// `spider_transformations` where it isn't).
+///
+/// v1 ships the text family. `Screenshot`, `Pdf`, structured `Json` are
+/// deliberately omitted — they need either a browser route or
+/// vendor-specific extraction logic and are deferred until the simpler
+/// formats are exercised.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Format {
+    /// GFM-flavoured markdown. Default when callers don't specify.
+    Markdown,
+    /// HTML source — either vendor passthrough or the route's raw response.
+    Html,
+    /// Plain text, tags stripped.
+    Text,
+    /// JSON array of absolute URLs found on the page.
+    Links,
+}
 
 #[derive(Debug, Clone)]
 pub struct ScrapeRequest {
@@ -31,6 +53,11 @@ pub struct ScrapeRequest {
     /// concurrent requests). Empty by default; populated by callers that
     /// thread per-request credentials in (e.g. gottem-cloud's BYOK path).
     pub credentials: HashMap<String, String>,
+    /// Output formats the caller wants. Empty = "whatever the route returns
+    /// natively" (legacy single-format behavior). Non-empty = gottem-cloud's
+    /// transform pipeline produces one payload per format from the vendor
+    /// response. See [`Format`].
+    pub formats: HashSet<Format>,
 }
 
 impl ScrapeRequest {
@@ -47,7 +74,16 @@ impl ScrapeRequest {
             required_caps: Capabilities::default(),
             extra: HashMap::new(),
             credentials: HashMap::new(),
+            formats: HashSet::new(),
         }
+    }
+
+    /// Builder-style: attach a set of requested output formats. The orchestrator
+    /// passes this through unchanged; gottem-cloud's transform pipeline
+    /// consumes it after the orchestrator returns.
+    pub fn with_formats(mut self, formats: HashSet<Format>) -> Self {
+        self.formats = formats;
+        self
     }
 
     /// Look up an env-var name, preferring this request's [`credentials`]
