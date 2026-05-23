@@ -32,7 +32,8 @@ reqwest     = { version = "0.12", default-features = false, features = ["rustls-
 
 [features]
 default = ["chrome"]
-# Pulls in chromiumoxide via spider — adds ~30s to first build but enables T8 routes.
+# Pulls in chromey (the chromiumoxide fork the spider stack standardized on)
+# via gottem-adapters-chrome — adds ~30s to first build but enables T8 routes.
 chrome  = ["dep:gottem-adapters-chrome"]
 
 [lints.rust]
