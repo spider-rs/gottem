@@ -28,11 +28,14 @@ oxylabs            = []
 two-captcha        = []
 browserbase        = []
 browser-use        = []
+crawlbase          = []
+diffbot            = []
 all = [
     "spider-cloud", "firecrawl", "brightdata", "zyte", "zenrows", "scrapingbee",
     "brightdata-browser", "browserless", "spider-browser",
     "apify", "oxylabs", "two-captcha",
     "browserbase", "browser-use",
+    "crawlbase", "diffbot",
 ]
 
 [lints.rust]

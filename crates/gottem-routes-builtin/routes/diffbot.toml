@@ -1,0 +1,45 @@
+# Diffbot Extract — Article API. AI-driven structured extraction.
+#
+# Env var: DIFFBOT_TOKEN
+# Endpoint: https://api.diffbot.com/v3/article
+# Docs:     https://docs.diffbot.com/reference/extract-introduction
+#
+# Diffbot's value is the extraction layer: it executes JS where needed,
+# strips navigation/ads, and returns clean structured JSON (`objects[0]`
+# is the primary article). We return the article's plain-text body —
+# callers needing rendered HTML can use the `$.objects[0].html` field
+# instead by adding a parallel route.
+#
+# Pricing: free tier ships 10k credits/mo (1 credit per Extract call),
+# enough to leave the system account on free indefinitely for ~333 calls/day.
+# Subscribe ($299/mo Startup) only if usage outgrows that.
+
+# ----------------------------------------------------------------------------
+# T5 — Extract API. Executes JS where needed; returns structured JSON.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "diffbot.extract"
+adapter     = "direct_http"
+endpoint    = "https://api.diffbot.com/v3/article?token={{env:DIFFBOT_TOKEN}}&url={{url}}"
+method      = "GET"
+tier        = 5
+# 1 Diffbot credit = $0.001/page on the Startup plan (free on the 10k/mo tier).
+# The route's static cost is pegged at T5 norms (50 milli-cents) rather than the
+# raw $0.001 figure so the tier-monotonic-cost catalog invariant holds — within
+# T5 the ladder breaks ties by `priority`, so this stays a fallback under the
+# cheaper Spider/Firecrawl/ZenRows/ScrapingBee chrome routes.
+cost        = 50
+priority    = 2                 # tiebreak below cheaper T5 chrome routes
+timeout_ms  = 60000
+concurrency = 10
+
+[route.parse]
+kind = "json_path"
+path = "$.objects[0].text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js = true

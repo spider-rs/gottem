@@ -102,6 +102,14 @@ pub fn register_all(builder: RouteCatalogBuilder) -> Result<RouteCatalogBuilder,
     {
         b = add_browser_use(b)?;
     }
+    #[cfg(feature = "crawlbase")]
+    {
+        b = add_crawlbase(b)?;
+    }
+    #[cfg(feature = "diffbot")]
+    {
+        b = add_diffbot(b)?;
+    }
     Ok(b)
 }
 
@@ -207,6 +215,22 @@ pub fn add_browser_use(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, Fe
     b.add_toml(include_str!("../routes/browser_use.toml"))
 }
 
+/// Crawlbase Crawling API — GET with token in query string, raw HTML response.
+/// One route at T4 (standard / datacenter IPs, no JS). True PAYG: only pay for
+/// successful requests, no monthly commitment. Requires env var `CRAWLBASE_TOKEN`.
+#[cfg(feature = "crawlbase")]
+pub fn add_crawlbase(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
+    b.add_toml(include_str!("../routes/crawlbase.toml"))
+}
+
+/// Diffbot Extract (Article API) — GET with token in query string, structured
+/// JSON response. One route at T5 with JS rendering. Free tier ships 10k
+/// credits/mo (1 credit/page). Requires env var `DIFFBOT_TOKEN`.
+#[cfg(feature = "diffbot")]
+pub fn add_diffbot(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
+    b.add_toml(include_str!("../routes/diffbot.toml"))
+}
+
 /// Raw access to the embedded TOML strings. Useful for displaying the shipped catalog
 /// in CLI output (e.g. `gottem routes show <vendor>`) or for tests.
 pub mod embedded {
@@ -238,4 +262,8 @@ pub mod embedded {
     pub const BROWSERBASE: &str = include_str!("../routes/browserbase.toml");
     #[cfg(feature = "browser-use")]
     pub const BROWSER_USE: &str = include_str!("../routes/browser_use.toml");
+    #[cfg(feature = "crawlbase")]
+    pub const CRAWLBASE: &str = include_str!("../routes/crawlbase.toml");
+    #[cfg(feature = "diffbot")]
+    pub const DIFFBOT: &str = include_str!("../routes/diffbot.toml");
 }

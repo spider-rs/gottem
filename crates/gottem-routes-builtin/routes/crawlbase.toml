@@ -1,0 +1,37 @@
+# Crawlbase routes — Crawling API. Token in query string, raw HTML response.
+#
+# Env var: CRAWLBASE_TOKEN
+# Endpoint: https://api.crawlbase.com/
+# Docs:     https://crawlbase.com/docs/crawling-api/
+#
+# Crawlbase returns the raw HTML body of the requested URL — no JSON wrapper.
+# The token sits in the URL query string (not a header), so AuthSpec is None
+# and {{env:CRAWLBASE_TOKEN}} in the endpoint template carries the credential.
+# Same path picks up BYOK overrides automatically because gottem-core's
+# `substitute_env` resolves env names through `ScrapeRequest::resolve_env`
+# (request creds beat process env).
+#
+# Pricing: "Only pay for successful requests" (PAYG, no monthly commitment).
+# $3/1k at first 1k, $2/1k next 10k, $0.60/1k at 10k+, down to $0.02/1k at scale.
+
+# ----------------------------------------------------------------------------
+# T4 — Standard Crawling API. Datacenter IPs, no JS render.
+# Cheaper than spider.cloud.http at scale; ladder picks spider first by priority.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "crawlbase.standard"
+adapter     = "direct_http"
+endpoint    = "https://api.crawlbase.com/?token={{env:CRAWLBASE_TOKEN}}&url={{url}}"
+method      = "GET"
+tier        = 4
+cost        = 30                # ~$0.003/req at low volume; scales toward $0.0006/req
+priority    = 1                 # tiebreak after spider.cloud.http within T4
+timeout_ms  = 30000
+concurrency = 20
+
+[route.parse]
+kind = "html"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
