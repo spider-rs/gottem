@@ -94,10 +94,8 @@ impl Adapter for ChromeCdpAdapter {
         let ws_url = build_ws_url(route, req)?;
 
         // ---- Connect (cancel-aware + connect_timeout-bounded) -------------
-        let connect_fut = tokio::time::timeout(
-            self.connect_timeout,
-            chromey::Browser::connect(&ws_url),
-        );
+        let connect_fut =
+            tokio::time::timeout(self.connect_timeout, chromey::Browser::connect(&ws_url));
         let (browser, mut handler) = tokio::select! {
             biased;
             _ = cancel.cancelled() => return Err(FetchError::Cancelled),

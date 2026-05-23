@@ -121,8 +121,16 @@ pub fn extract_content_and_cost(
     let need_first = matches!(parse, ResponseParse::JsonlFirst { .. })
         || matches!(cost, Some(CostExtract::JsonlFirst { .. }));
 
-    let full = if need_full { parse_full_json(body) } else { None };
-    let first = if need_first { parse_first_record(body) } else { None };
+    let full = if need_full {
+        parse_full_json(body)
+    } else {
+        None
+    };
+    let first = if need_first {
+        parse_first_record(body)
+    } else {
+        None
+    };
 
     let content = parse_content_with(parse, body, full.as_ref(), first.as_ref())?;
     let cost_out = extract_cost_with(cost, headers, full.as_ref(), first.as_ref());

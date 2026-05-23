@@ -1137,7 +1137,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-browseruse"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1152,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-captcha"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1167,7 +1167,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-chrome"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-http"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1196,7 +1196,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-spider"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1210,7 +1210,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "clap",
@@ -1229,7 +1229,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-core"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1249,7 +1249,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-routes-builtin"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "gottem-core",
 ]

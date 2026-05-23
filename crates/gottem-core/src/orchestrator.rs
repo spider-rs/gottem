@@ -375,8 +375,7 @@ impl Orchestrator {
                 Ok(resp) => {
                     // Validate against the route's declared validators before declaring victory.
                     if let Some(route) = self.catalog.get(&resp.route_id) {
-                        if let Some(reason) = validate(&route, &resp.body, resp.content_str())
-                        {
+                        if let Some(reason) = validate(&route, &resp.body, resp.content_str()) {
                             last_err = Some(FetchError::Validation(reason));
                             continue;
                         }
@@ -440,8 +439,7 @@ impl Orchestrator {
                     race_cancel.cancel();
                     // Validate before declaring winner.
                     if let Some(route) = self.catalog.get(&resp.route_id) {
-                        if let Some(reason) = validate(&route, &resp.body, resp.content_str())
-                        {
+                        if let Some(reason) = validate(&route, &resp.body, resp.content_str()) {
                             last_err = Some(FetchError::Validation(reason));
                             // Reset cancel so still-pending tasks get a chance (rare edge case).
                             continue;

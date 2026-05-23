@@ -24,11 +24,18 @@ Powered by [`spider`](https://github.com/spider-rs/spider).
 ## Install
 
 ```bash
-cd crates/gottem-cli
-cargo install --path .
+cargo install gottem-cli
 ```
 
-This installs the `gottem` binary on your PATH.
+This installs the `gottem` binary on your PATH from
+[crates.io](https://crates.io/crates/gottem-cli) — no checkout needed.
+Building from source (e.g. for unreleased changes) is also fine:
+
+```bash
+git clone https://github.com/spider-rs/gottem.git
+cd gottem
+cargo install --path crates/gottem-cli
+```
 
 ---
 
@@ -307,7 +314,7 @@ gottem/
     ├── gottem-core                  traits, types, orchestrator, retry strategies
     ├── gottem-adapters-http         direct_http · http_json · http_jsonl_stream
     ├── gottem-adapters-spider       T0–T3 local fetching via spider::Website
-    ├── gottem-adapters-chrome       T8 CDP via spider::chromiumoxide
+    ├── gottem-adapters-chrome       T8 CDP via `chromey` (chromiumoxide fork)
     ├── gottem-adapters-captcha      T9 2Captcha solver chain primitive
     ├── gottem-routes-builtin        embedded vendor TOML, feature-gated per vendor
     └── gottem-cli                   `gottem` binary — fetch · probe · routes

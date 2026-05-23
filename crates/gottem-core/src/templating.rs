@@ -168,8 +168,7 @@ mod tests {
         let mut r = req("https://example.com/");
         r.credentials
             .insert("GOTTEM_TPL_CRED_OVERRIDE".into(), "from-request".into());
-        let out =
-            render_body(r#"{"token":"{{env:GOTTEM_TPL_CRED_OVERRIDE}}"}"#, &r).unwrap();
+        let out = render_body(r#"{"token":"{{env:GOTTEM_TPL_CRED_OVERRIDE}}"}"#, &r).unwrap();
         assert_eq!(out, r#"{"token":"from-request"}"#);
     }
 
@@ -181,17 +180,18 @@ mod tests {
         let mut r = req("https://example.com/");
         r.credentials
             .insert("GOTTEM_TPL_CRED_ONLY".into(), "only-here".into());
-        let out =
-            render_body(r#"{"token":"{{env:GOTTEM_TPL_CRED_ONLY}}"}"#, &r).unwrap();
+        let out = render_body(r#"{"token":"{{env:GOTTEM_TPL_CRED_ONLY}}"}"#, &r).unwrap();
         assert_eq!(out, r#"{"token":"only-here"}"#);
     }
 
     #[test]
     fn missing_env_and_no_override_is_auth_error() {
         std::env::remove_var("GOTTEM_TPL_CRED_ABSENT");
-        let err =
-            render_body(r#"{"k":"{{env:GOTTEM_TPL_CRED_ABSENT}}"}"#, &req("https://x/"))
-                .unwrap_err();
+        let err = render_body(
+            r#"{"k":"{{env:GOTTEM_TPL_CRED_ABSENT}}"}"#,
+            &req("https://x/"),
+        )
+        .unwrap_err();
         assert!(matches!(err, FetchError::Auth(_)), "got {err:?}");
     }
 }
