@@ -235,11 +235,12 @@ pub fn add_diffbot(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchE
     b.add_toml(include_str!("../routes/diffbot.toml"))
 }
 
-/// DataForSEO — POST with HTTP Basic auth, JSON response. Pay-as-you-go SERP
-/// + SEO data APIs; prepaid funds never expire ($50 min top-up). Per-request
-/// cost is extracted live from `$.cost` (dollars) so the static estimate
-/// only matters as a fallback. One route at T7 covering Google Organic SERP
-/// Live Regular. Requires env vars `DATAFORSEO_LOGIN` + `DATAFORSEO_PASSWORD`.
+/// DataForSEO — POST with HTTP Basic auth, JSON response. Pay-as-you-go
+/// SERP and SEO data APIs; prepaid funds never expire ($50 min top-up).
+/// Per-request cost is extracted live from `$.cost` (dollars) so the static
+/// estimate only matters as a fallback. One route at T7 covering Google
+/// Organic SERP Live Regular. Requires env vars `DATAFORSEO_LOGIN` and
+/// `DATAFORSEO_PASSWORD`.
 #[cfg(feature = "dataforseo")]
 pub fn add_dataforseo(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
     b.add_toml(include_str!("../routes/dataforseo.toml"))

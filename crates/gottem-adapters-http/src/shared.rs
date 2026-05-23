@@ -109,6 +109,10 @@ pub fn render_body(body: &BodyTemplate, req: &ScrapeRequest) -> Result<Option<By
 ///
 /// Content-parse failures are hard errors (the caller explicitly asked for that field);
 /// cost-extract failures collapse to `None` — missing cost data is normal, never fatal.
+// The 2-tuple return reads naturally as `(content, cost)` at call sites and
+// is one of two places it's used; a type alias would obscure more than it
+// helps. Clippy's threshold flags it but it's deliberate.
+#[allow(clippy::type_complexity)]
 pub fn extract_content_and_cost(
     parse: &ResponseParse,
     cost: Option<&CostExtract>,
