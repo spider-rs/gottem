@@ -11,8 +11,13 @@ repository.workspace = true
 
 [dependencies]
 gottem-core  = { path = "../gottem-core", version = "0.1.5" }
-# Enables spider's chrome feature, which re-exports chromiumoxide. Single chromiumoxide
-# build across the workspace, no duplication with gottem-adapters-spider.
+# CDP driver. `chromey` is the chromiumoxide fork the spider stack standardized
+# on — we depend on it directly here (rather than reaching through
+# `spider::chromiumoxide`) so this adapter stays decoupled from spider's
+# feature flags and the type path in code is the canonical one. Same
+# underlying build either way; spider's chrome feature also resolves to
+# `chromey`, so there's no duplicate chromium-protocol compile.
+chromey      = "2.49"
 spider       = { workspace = true, features = ["basic", "chrome"] }
 async-trait  = { workspace = true }
 bytes        = { workspace = true }

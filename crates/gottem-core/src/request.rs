@@ -9,24 +9,28 @@ use crate::capabilities::Capabilities;
 
 /// Output format the caller wants for a scraped page. Multi-format requests
 /// supply a set; gottem-cloud's transform pipeline produces one byte payload
-/// per requested format (vendor-native where possible, server-side via
-/// `spider_transformations` where it isn't).
+/// per requested format. Each variant maps 1:1 onto a
+/// `spider_transformations::transformation::content::ReturnFormat` — the
+/// same enum spider_service uses — so behavior matches the upstream
+/// transform pipeline exactly.
 ///
-/// v1 ships the text family. `Screenshot`, `Pdf`, structured `Json` are
-/// deliberately omitted — they need either a browser route or
-/// vendor-specific extraction logic and are deferred until the simpler
-/// formats are exercised.
+/// Note: link extraction is **not** a format here, mirroring spider_service.
+/// Use [`ScrapeRequest::return_links`] for that — it's a separate flag and
+/// produces a separate `links` field on the response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Format {
-    /// GFM-flavoured markdown. Default when callers don't specify.
+    /// GFM-flavoured markdown — `spider_transformations::ReturnFormat::Markdown`.
     Markdown,
-    /// HTML source — either vendor passthrough or the route's raw response.
+    /// HTML source passthrough — `spider_transformations::ReturnFormat::Raw`.
     Html,
-    /// Plain text, tags stripped.
+    /// Plain text from HTML — `spider_transformations::ReturnFormat::Html2Text`.
     Text,
-    /// JSON array of absolute URLs found on the page.
-    Links,
+    /// Base64-encoded PNG rendered from the HTML by a headless browser —
+    /// `spider_transformations::ReturnFormat::Screenshot`. Source must be
+    /// HTML; text-already payloads have nothing to render. Decode client-
+    /// side with `atob` or `Buffer.from(b64, "base64")`.
+    Screenshot,
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +62,11 @@ pub struct ScrapeRequest {
     /// transform pipeline produces one payload per format from the vendor
     /// response. See [`Format`].
     pub formats: HashSet<Format>,
+    /// Populate the response's `links` field with absolute URLs scraped
+    /// from the page's `<a href>` anchors. Mirrors spider_service's
+    /// `return_page_links` flag — links live alongside the content
+    /// payloads, not inside them.
+    pub return_links: bool,
 }
 
 impl ScrapeRequest {
@@ -75,6 +84,7 @@ impl ScrapeRequest {
             extra: HashMap::new(),
             credentials: HashMap::new(),
             formats: HashSet::new(),
+            return_links: false,
         }
     }
 
@@ -83,6 +93,13 @@ impl ScrapeRequest {
     /// consumes it after the orchestrator returns.
     pub fn with_formats(mut self, formats: HashSet<Format>) -> Self {
         self.formats = formats;
+        self
+    }
+
+    /// Builder-style: enable link extraction on the response. Spider_service-
+    /// style: links sit beside the content payloads, not inside the format map.
+    pub fn with_return_links(mut self, on: bool) -> Self {
+        self.return_links = on;
         self
     }
 

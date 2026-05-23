@@ -10,18 +10,21 @@
 //! | Spider Browser Cloud         | `wss://browser.spider.cloud/v1/browser?api_key=...` | URL template (no auth) |
 //! | Local Chrome / chrome-remote | `ws://localhost:9222/devtools/browser/<id>`         | None                   |
 //!
-//! ## chromiumoxide via spider
+//! ## CDP via chromey
 //!
-//! We use `spider::chromiumoxide` (spider re-exports it when the `chrome` feature is on).
-//! This guarantees one chromiumoxide build across the workspace — no duplicate chromium
-//! protocol crates, no compile-time blowup on top of what spider already brings.
+//! We depend on the **`chromey` package** directly — the chromiumoxide fork
+//! the spider stack standardized on. The package's lib name is still
+//! `chromiumoxide`, so code reads as `chromey::Browser` etc., matching
+//! the original surface 1:1. Going through `chromey` rather than
+//! `spider::chromiumoxide` keeps this adapter decoupled from spider's
+//! feature flags and pins the fork explicitly in Cargo.toml.
 //!
 //! ## Cancellation + no-deadlock
 //!
 //! Three async checkpoints, each guarded by `tokio::select!` against [`CancelToken`]:
 //! 1. **Connect** — bounded by a 15-second connect timeout AND the outer cancel token.
 //! 2. **Navigate + content** — bounded by `route.timeout()` AND cancel.
-//! 3. **Handler task** — required to drive chromiumoxide event processing; on
+//! 3. **Handler task** — required to drive CDP event processing; on
 //!    cleanup the browser is dropped first, which closes the WebSocket; the
 //!    handler stream then yields None and the loop exits naturally. The handle
 //!    is `await`-ed with a 2-second timeout so the task is deterministically
@@ -39,6 +42,11 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bytes::Bytes;
+// Alias the chromey package's lib (it ships as `chromiumoxide` for source
+// compatibility with the original crate) under its package name so code in
+// this module reads as `chromey::Browser` etc. — the name we standardized
+// on across the spider stack. One-line shim; no upstream changes needed.
+use chromiumoxide as chromey;
 use futures_util::StreamExt;
 use gottem_core::{
     Adapter, AdapterContext, AdapterKind, AuthSpec, CancelToken, FetchError, Route, ScrapeRequest,
@@ -88,7 +96,7 @@ impl Adapter for ChromeCdpAdapter {
         // ---- Connect (cancel-aware + connect_timeout-bounded) -------------
         let connect_fut = tokio::time::timeout(
             self.connect_timeout,
-            spider::chromiumoxide::Browser::connect(&ws_url),
+            chromey::Browser::connect(&ws_url),
         );
         let (browser, mut handler) = tokio::select! {
             biased;
@@ -101,7 +109,7 @@ impl Adapter for ChromeCdpAdapter {
         };
 
         // ---- Drive CDP events on a background task ------------------------
-        // chromiumoxide requires the handler to be polled or *all* operations hang.
+        // chromey requires the handler to be polled or *all* operations hang.
         // Aborting at the end closes the connection cleanly.
         let handler_task = tokio::spawn(async move { while handler.next().await.is_some() {} });
 
@@ -117,7 +125,7 @@ impl Adapter for ChromeCdpAdapter {
         .await;
 
         // ---- Cleanup: close browser, let the handler exit naturally ---------
-        // Drop the browser first so the WebSocket closes — chromiumoxide's handler
+        // Drop the browser first so the WebSocket closes — chromey's handler
         // stream yields None on disconnect and the spawned loop exits on its own.
         // Awaiting the handle joins it deterministically (no detached zombie in a
         // hot fetch loop). The 2s timeout is the safety net for the edge case
@@ -166,7 +174,7 @@ impl Adapter for ChromeCdpAdapter {
 
 /// Open a fresh tab, navigate to `url`, wait for `load`, return `(status, html)`.
 async fn navigate_and_extract(
-    browser: &spider::chromiumoxide::Browser,
+    browser: &chromey::Browser,
     url: &str,
 ) -> Result<(u16, String), FetchError> {
     let page = browser
@@ -184,7 +192,7 @@ async fn navigate_and_extract(
         .await
         .map_err(|e| FetchError::Parse(format!("content: {e}")))?;
 
-    // chromiumoxide doesn't always surface the main-frame HTTP status code in a
+    // chromey doesn't always surface the main-frame HTTP status code in a
     // first-class way; we default to 200 on successful HTML extraction.
     Ok((200, html))
 }
