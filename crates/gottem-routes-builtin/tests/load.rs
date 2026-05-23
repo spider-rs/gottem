@@ -174,6 +174,9 @@ fn register_all_succeeds_with_default_features() {
     if cfg!(feature = "diffbot") {
         expected += 1;
     }
+    if cfg!(feature = "dataforseo") {
+        expected += 1;
+    }
 
     assert_eq!(catalog.len(), expected, "route count mismatch");
 }

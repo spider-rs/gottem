@@ -1,0 +1,61 @@
+# DataForSEO — pay-as-you-go SEO + SERP APIs.
+#
+# Env vars: DATAFORSEO_LOGIN + DATAFORSEO_PASSWORD (HTTP Basic auth — same
+# two-secret shape as oxylabs, so BYOK is deferred until the composite-
+# secret pattern lands; system-account credentials only for now).
+#
+# Endpoint: https://api.dataforseo.com/v3/
+# Docs:     https://docs.dataforseo.com/v3/
+#
+# Commercial terms: prepaid funds NEVER expire, $50 minimum top-up,
+# 30-day refund on unused balance. Live SERP endpoints bill per request
+# at ~$0.0006/result; the route's `cost_extract` pulls the actual
+# per-request cost from `$.cost` (dollars unit) so users are billed
+# accurately and the static `cost` only acts as a fallback floor.
+
+# ----------------------------------------------------------------------------
+# T7 — Google Organic SERP, Live Regular endpoint.
+#
+# Per the catalog tiering convention this sits at T7 ("smart" / advanced
+# API), but SERP is conceptually a different category from URL scraping —
+# callers invoke this via `force_provider` with `body.url` carrying the
+# search keyword, NOT through the cheapest-first ladder.
+#
+# Extend with sibling routes (Bing SERP, Keyword Data, Backlinks, On-Page,
+# etc.) as needs arise; one TOML entry per endpoint, same auth pair.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "dataforseo.serp_google"
+adapter     = "http_json"
+endpoint    = "https://api.dataforseo.com/v3/serp/google/organic/live/regular"
+method      = "POST"
+tier        = 7
+cost        = 80                # T7-norm fallback; live cost overrides via cost_extract
+priority    = 2
+timeout_ms  = 60000
+concurrency = 10
+
+[route.auth]
+kind     = "basic"
+user_env = "DATAFORSEO_LOGIN"
+pass_env = "DATAFORSEO_PASSWORD"
+
+[route.body]
+kind     = "json"
+template = '''[{"keyword":"{{url}}","language_code":"en","location_code":2840,"depth":10}]'''
+
+[route.parse]
+# Items is an array of organic results (title, url, description, position, …).
+# JsonPath's value_at serializes non-string values back to JSON text, so the
+# caller receives the array as a JSON string in `content` — parse client-side.
+kind = "json_path"
+path = "$.tasks[0].result[0].items"
+
+[route.cost_extract]
+# DataForSEO returns `cost` at the response root as a USD amount per call.
+# Multiplier 1.0 keeps the raw value; gottem-cloud's billable_credits maps
+# dollars → credits at 10,000 credits/$1.
+kind       = "json_path"
+path       = "$.cost"
+unit       = "dollars"
+multiplier = 1.0

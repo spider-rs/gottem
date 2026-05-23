@@ -110,6 +110,10 @@ pub fn register_all(builder: RouteCatalogBuilder) -> Result<RouteCatalogBuilder,
     {
         b = add_diffbot(b)?;
     }
+    #[cfg(feature = "dataforseo")]
+    {
+        b = add_dataforseo(b)?;
+    }
     Ok(b)
 }
 
@@ -231,6 +235,16 @@ pub fn add_diffbot(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchE
     b.add_toml(include_str!("../routes/diffbot.toml"))
 }
 
+/// DataForSEO — POST with HTTP Basic auth, JSON response. Pay-as-you-go SERP
+/// + SEO data APIs; prepaid funds never expire ($50 min top-up). Per-request
+/// cost is extracted live from `$.cost` (dollars) so the static estimate
+/// only matters as a fallback. One route at T7 covering Google Organic SERP
+/// Live Regular. Requires env vars `DATAFORSEO_LOGIN` + `DATAFORSEO_PASSWORD`.
+#[cfg(feature = "dataforseo")]
+pub fn add_dataforseo(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
+    b.add_toml(include_str!("../routes/dataforseo.toml"))
+}
+
 /// Raw access to the embedded TOML strings. Useful for displaying the shipped catalog
 /// in CLI output (e.g. `gottem routes show <vendor>`) or for tests.
 pub mod embedded {
@@ -266,4 +280,6 @@ pub mod embedded {
     pub const CRAWLBASE: &str = include_str!("../routes/crawlbase.toml");
     #[cfg(feature = "diffbot")]
     pub const DIFFBOT: &str = include_str!("../routes/diffbot.toml");
+    #[cfg(feature = "dataforseo")]
+    pub const DATAFORSEO: &str = include_str!("../routes/dataforseo.toml");
 }
