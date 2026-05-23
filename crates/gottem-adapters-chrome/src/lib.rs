@@ -21,11 +21,15 @@
 //! Three async checkpoints, each guarded by `tokio::select!` against [`CancelToken`]:
 //! 1. **Connect** — bounded by a 15-second connect timeout AND the outer cancel token.
 //! 2. **Navigate + content** — bounded by `route.timeout()` AND cancel.
-//! 3. **Handler task** — required to drive chromiumoxide event processing; aborted via
-//!    `JoinHandle::abort()` after the fetch resolves (cancelled or otherwise).
+//! 3. **Handler task** — required to drive chromiumoxide event processing; on
+//!    cleanup the browser is dropped first, which closes the WebSocket; the
+//!    handler stream then yields None and the loop exits naturally. The handle
+//!    is `await`-ed with a 2-second timeout so the task is deterministically
+//!    joined (no detached zombies in a hot fetch loop), and on the rare timeout
+//!    the JoinHandle is dropped — task ends shortly after with no live resources.
 //!
-//! The browser handle is dropped at function exit, which closes the WebSocket connection
-//! and (for Brightdata-style per-session billing) ends the remote browser session.
+//! Dropping the browser handle closes the WebSocket connection and (for
+//! Brightdata-style per-session billing) ends the remote browser session.
 
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms)]
@@ -112,10 +116,22 @@ impl Adapter for ChromeCdpAdapter {
         })
         .await;
 
-        // ---- Cleanup: always abort handler; browser drops at scope exit ---
-        handler_task.abort();
-        // best-effort browser close — ignore errors, drop will close anyway
+        // ---- Cleanup: close browser, let the handler exit naturally ---------
+        // Drop the browser first so the WebSocket closes — chromiumoxide's handler
+        // stream yields None on disconnect and the spawned loop exits on its own.
+        // Awaiting the handle joins it deterministically (no detached zombie in a
+        // hot fetch loop). The 2s timeout is the safety net for the edge case
+        // where the WS-close signal doesn't promptly reach the handler (vendor
+        // proxy holding the connection open, etc.) — on timeout the JoinHandle is
+        // dropped, which detaches; the task ends shortly after with no resources
+        // held except a dead browser reference.
+        //
+        // We deliberately do NOT call `handler_task.abort()` here — aborting
+        // mid-stream would interrupt the handler's own teardown of CDP state
+        // and surface as `JoinError::Cancelled` from the await, defeating the
+        // point of joining.
         drop(browser);
+        let _ = tokio::time::timeout(Duration::from_secs(2), handler_task).await;
 
         let (status, html) = match work_outcome {
             Ok(Ok(out)) => out,
