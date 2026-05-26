@@ -171,3 +171,47 @@ n    = 500
 js          = true
 residential = true
 stealth     = true
+
+# ----------------------------------------------------------------------------
+# T4 — /crawl. Streams JSONL across many pages from one POST. Used by
+# Orchestrator::crawl when CrawlEngine::SpiderCloud (or Auto, with the key
+# resolved) is selected. The generic gottem CrawlRequest fields map onto
+# Spider Cloud's body shape via the {{param:...}} template:
+#
+#   gottem CrawlRequest field   →   Spider Cloud /crawl field
+#   ─────────────────────────────────────────────────────────
+#   limit                       →   limit
+#   depth                       →   depth
+#   subdomains                  →   subdomains
+#   tld                         →   tld
+#   deny                        →   blacklist
+#   allow                       →   whitelist
+#   respect_robots              →   respect_robots_txt
+#
+# Defaults match CrawlRequest::new (limit=10, depth=2).
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "spider.cloud.crawl"
+adapter     = "http_jsonl_stream_many"
+endpoint    = "https://api.spider.cloud/crawl"
+method      = "POST"
+tier        = 4
+cost        = 10
+priority    = 0
+timeout_ms  = 600000          # crawls can run for many minutes
+concurrency = 4
+
+[route.auth]
+kind = "bearer"
+env  = "SPIDER_CLOUD_API_KEY"
+
+[route.body]
+kind     = "json"
+template = '''{"url":"{{url}}","limit":{{param:limit|10}},"depth":{{param:depth|2}},"subdomains":{{param:subdomains|false}},"tld":{{param:tld|false}},"blacklist":{{param:deny|[]}},"whitelist":{{param:allow|[]}},"respect_robots_txt":{{param:respect_robots|false}},"return_format":"markdown","readability":true}'''
+
+# Per-record content extraction inside each JSONL line. `$.content` is the
+# rendered page payload; `links`/`status`/`depth` are read separately by
+# the adapter using fixed field names.
+[route.parse]
+kind = "jsonl_each"
+path = "$.content"

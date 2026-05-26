@@ -5,11 +5,12 @@ use gottem_core::{AdapterKind, RouteCatalogBuilder, Tier};
 
 #[cfg(feature = "spider-cloud")]
 #[test]
-fn spider_cloud_loads_4_routes_tiers_4_through_7() {
+fn spider_cloud_loads_5_routes_tiers_4_through_7() {
     let catalog = gottem_routes_builtin::add_spider_cloud(RouteCatalogBuilder::new())
         .expect("spider_cloud.toml parses")
         .build();
-    assert_eq!(catalog.len(), 4);
+    // 4 scrape routes + 1 crawl route (spider.cloud.crawl).
+    assert_eq!(catalog.len(), 5);
     for id in [
         "spider.cloud.http",
         "spider.cloud.chrome",
@@ -32,6 +33,12 @@ fn spider_cloud_loads_4_routes_tiers_4_through_7() {
     assert!(smart.caps.js);
     assert!(smart.caps.residential);
     assert!(smart.caps.stealth);
+    // Crawl route is a separate adapter family.
+    let crawl = catalog
+        .get("spider.cloud.crawl")
+        .expect("spider.cloud.crawl route loaded");
+    assert_eq!(crawl.adapter, AdapterKind::HttpJsonlStreamMany);
+    assert_eq!(crawl.tier, Tier::T4);
 }
 
 #[cfg(feature = "firecrawl")]
@@ -125,9 +132,11 @@ fn register_all_succeeds_with_default_features() {
         .expect("all builtin routes load")
         .build();
 
-    let mut expected = 0usize;
+    // local.crawl is always present.
+    let mut expected = 1usize;
     if cfg!(feature = "spider-cloud") {
-        expected += 4;
+        // 4 scrape routes + 1 crawl route (spider.cloud.crawl).
+        expected += 5;
     }
     if cfg!(feature = "firecrawl") {
         expected += 2;

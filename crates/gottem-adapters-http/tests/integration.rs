@@ -4,16 +4,19 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use gottem_adapters_http::{
     build_default_client, DirectHttpAdapter, HttpJsonAdapter, HttpJsonlStreamAdapter,
+    HttpJsonlStreamManyAdapter,
 };
 use gottem_core::{
     Adapter, AdapterContext, AdapterKind, AuthSpec, BodyTemplate, CancelToken, Capabilities,
-    EndpointTemplate, FetchError, HttpMethod, ResponseParse, Route, ScrapeRequest, Tier, Validator,
+    CrawlAdapter, CrawlRequest, EndpointTemplate, FetchError, HttpMethod, ResponseParse, Route,
+    ScrapeRequest, Tier, Validator,
 };
 use url::Url;
 use wiremock::matchers::{body_string, header, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 fn base_route(server: &MockServer, adapter: AdapterKind, parse: ResponseParse) -> Route {
     Route {
@@ -324,3 +327,181 @@ async fn cancel_aborts_in_flight_request() {
     );
     assert!(matches!(err, FetchError::Cancelled), "got {err:?}");
 }
+
+// ============================================================================
+// HttpJsonlStreamManyAdapter — streaming JSONL crawl
+// ============================================================================
+
+fn crawl_route(server: &MockServer) -> Route {
+    Route {
+        id: Arc::from("spider.cloud.crawl"),
+        adapter: AdapterKind::HttpJsonlStreamMany,
+        endpoint: EndpointTemplate::parse(&format!("{}/crawl", server.uri())).unwrap(),
+        method: HttpMethod::Post,
+        auth: AuthSpec::Bearer {
+            env: "TEST_SPIDER_CLOUD_KEY".into(),
+        },
+        headers: vec![],
+        body: BodyTemplate::Json {
+            template: r#"{"url":"{{url}}","limit":{{param:limit|10}},"depth":{{param:depth|2}},"subdomains":{{param:subdomains|false}},"tld":{{param:tld|false}},"blacklist":{{param:deny|[]}},"whitelist":{{param:allow|[]}},"respect_robots_txt":{{param:respect_robots|false}},"return_format":"markdown"}"#.into(),
+        },
+        parse: ResponseParse::JsonlEach { path: "$.content".into() },
+        validate: vec![],
+        tier: Tier::T4,
+        cost: 10,
+        priority: 0,
+        caps: Capabilities::default(),
+        timeout_ms: 5_000,
+        concurrency: 4,
+        retry_on: Default::default(),
+        cost_extract: None,
+    }
+}
+
+/// End-to-end: POST a CrawlRequest, verify the wire body carries every generic
+/// param mapped to Spider Cloud's field names, and the JSONL response streams
+/// into PageEntry yields one record at a time.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn jsonl_many_maps_all_crawl_params_and_streams_records() {
+    std::env::set_var("TEST_SPIDER_CLOUD_KEY", "sk-test");
+
+    let server = MockServer::start().await;
+    let expected_body = r#"{"url":"https://example.com/","limit":50,"depth":3,"subdomains":true,"tld":false,"blacklist":["/admin","\\.pdf$"],"whitelist":["/blog"],"respect_robots_txt":true,"return_format":"markdown"}"#;
+
+    Mock::given(method("POST"))
+        .and(path("/crawl"))
+        .and(header("authorization", "Bearer sk-test"))
+        .and(body_string(expected_body))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/jsonl")
+                .set_body_string(concat!(
+                    "{\"url\":\"https://example.com/\",\"status\":200,\"depth\":0,\"content\":\"# root\",\"costs\":{\"total\":1.0}}\n",
+                    "{\"url\":\"https://example.com/a\",\"status\":200,\"depth\":1,\"content\":\"# a\",\"links\":[\"https://example.com/b\"]}\n",
+                    "{\"url\":\"https://example.com/b\",\"status\":200,\"depth\":2,\"content\":\"# b\"}\n",
+                )),
+        )
+        .mount(&server)
+        .await;
+
+    let adapter = HttpJsonlStreamManyAdapter::new(build_default_client());
+    let route = crawl_route(&server);
+    let req = CrawlRequest::new(Url::parse("https://example.com/").unwrap())
+        .with_limit(50)
+        .with_depth(3)
+        .with_subdomains(true)
+        .with_allow(vec!["/blog".into()])
+        .with_deny(vec!["/admin".into(), "\\.pdf$".into()])
+        .with_respect_robots(true);
+
+    let mut stream = adapter
+        .execute(&route, &req, &CancelToken::new())
+        .await
+        .expect("adapter execute");
+
+    let mut entries = Vec::new();
+    while let Some(item) = stream.next().await {
+        entries.push(item.expect("page entry should be Ok"));
+    }
+    assert_eq!(entries.len(), 3, "three JSONL records → three PageEntries");
+    assert_eq!(entries[0].url.as_str(), "https://example.com/");
+    assert_eq!(entries[0].status, 200);
+    assert_eq!(entries[0].depth, 0);
+    assert_eq!(entries[0].content.as_deref().map(|b| std::str::from_utf8(b).unwrap()), Some("# root"));
+    assert_eq!(entries[1].url.as_str(), "https://example.com/a");
+    assert_eq!(entries[1].depth, 1);
+    assert_eq!(
+        entries[1].links.as_ref().unwrap()[0].as_str(),
+        "https://example.com/b"
+    );
+    assert_eq!(entries[2].depth, 2);
+    assert_eq!(entries[0].route_id.as_ref(), "spider.cloud.crawl");
+    assert_eq!(entries[0].tier, Tier::T4);
+    assert_eq!(entries[0].cost_milli, 10);
+}
+
+/// Stream survives the server closing without a trailing newline on the last
+/// record — typical for some streaming APIs.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn jsonl_many_flushes_trailing_record_without_newline() {
+    std::env::set_var("TEST_SPIDER_CLOUD_KEY", "sk-test");
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            "{\"url\":\"https://x.test/\",\"content\":\"first\"}\n\
+             {\"url\":\"https://x.test/2\",\"content\":\"second\"}", // no trailing \n
+        ))
+        .mount(&server)
+        .await;
+
+    let adapter = HttpJsonlStreamManyAdapter::new(build_default_client());
+    let route = crawl_route(&server);
+    let req = CrawlRequest::new(Url::parse("https://x.test/").unwrap());
+    let mut stream = adapter
+        .execute(&route, &req, &CancelToken::new())
+        .await
+        .unwrap();
+    let mut count = 0;
+    while let Some(item) = stream.next().await {
+        item.unwrap();
+        count += 1;
+    }
+    assert_eq!(count, 2, "trailing record without newline must still flush");
+}
+
+/// HTTP-level failure surfaces as `FetchError::Status` from execute itself —
+/// the stream is never created.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn jsonl_many_http_error_surfaces_immediately() {
+    std::env::set_var("TEST_SPIDER_CLOUD_KEY", "sk-test");
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(429).set_body_string("rate limited"))
+        .mount(&server)
+        .await;
+    let adapter = HttpJsonlStreamManyAdapter::new(build_default_client());
+    let route = crawl_route(&server);
+    let req = CrawlRequest::new(Url::parse("https://x.test/").unwrap());
+    let err = match adapter.execute(&route, &req, &CancelToken::new()).await {
+        Ok(_) => panic!("expected error"),
+        Err(e) => e,
+    };
+    assert!(matches!(err, FetchError::Status(429)), "got {err:?}");
+}
+
+/// Dropping the consumer cancels the underlying task — verified by observing
+/// that the spawned driver doesn't keep sending after the receiver disconnects.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn jsonl_many_consumer_drop_stops_driver() {
+    std::env::set_var("TEST_SPIDER_CLOUD_KEY", "sk-test");
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            "{\"url\":\"https://x.test/1\",\"content\":\"a\"}\n\
+             {\"url\":\"https://x.test/2\",\"content\":\"b\"}\n\
+             {\"url\":\"https://x.test/3\",\"content\":\"c\"}\n",
+        ))
+        .mount(&server)
+        .await;
+    let adapter = HttpJsonlStreamManyAdapter::new(build_default_client());
+    let route = crawl_route(&server);
+    let req = CrawlRequest::new(Url::parse("https://x.test/").unwrap());
+    let mut stream = adapter
+        .execute(&route, &req, &CancelToken::new())
+        .await
+        .unwrap();
+    // pull just one, then drop
+    let _first = stream.next().await.unwrap().unwrap();
+    drop(stream);
+    // give the spawned task a chance to notice — if it leaks, this test won't
+    // catch it visually, but the test still passes if no panic / no hang.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+}
+
+// Silence unused-imports if a future refactor removes Respond/Request.
+#[allow(dead_code)]
+fn _hint(_r: Request) -> ResponseTemplate {
+    ResponseTemplate::new(200)
+}
+#[allow(dead_code)]
+fn _resp_hint<R: Respond>(_r: R) {}

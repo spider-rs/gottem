@@ -39,6 +39,7 @@ pub mod cancel;
 pub mod capabilities;
 pub mod catalog;
 pub mod circuit;
+pub mod crawl;
 pub mod error;
 pub mod orchestrator;
 pub mod request;
@@ -61,12 +62,15 @@ pub use spider::utils::hedge::{HedgeConfig, HedgeTracker};
 pub use dashmap;
 pub use dashmap::DashMap;
 
-pub use adapter::{Adapter, AdapterContext, AdapterRegistry};
+pub use adapter::{Adapter, AdapterContext, AdapterRegistry, CrawlAdapter, CrawlAdapterRegistry};
 pub use budget::Budget;
 pub use cancel::CancelToken;
 pub use capabilities::Capabilities;
 pub use catalog::{RouteCatalog, RouteCatalogBuilder};
 pub use circuit::CircuitBreaker;
+pub use crawl::{
+    ControlFlow, CrawlBuilder, CrawlEngine, CrawlRequest, CrawlStats, PageEntry,
+};
 pub use error::FetchError;
 pub use orchestrator::{Mode, Orchestrator};
 pub use request::{Format, HttpMethod, ScrapeRequest};

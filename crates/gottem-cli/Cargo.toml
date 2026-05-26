@@ -1,6 +1,6 @@
 [package]
 name        = "gottem-cli"
-version     = "0.1.8"
+version = "0.1.9"
 description = "gottem CLI: universal scraper that reliably gets the data."
 readme      = "README.md"
 edition.workspace = true
@@ -14,19 +14,20 @@ name = "gottem"
 path = "src/main.rs"
 
 [dependencies]
-gottem-core                = { path = "../gottem-core", version = "0.1.7" }
-gottem-adapters-http       = { path = "../gottem-adapters-http", version = "0.1.7" }
-gottem-adapters-spider     = { path = "../gottem-adapters-spider", version = "0.1.7" }
-gottem-adapters-chrome     = { path = "../gottem-adapters-chrome", version = "0.1.7", optional = true }
-gottem-adapters-captcha    = { path = "../gottem-adapters-captcha", version = "0.1.7" }
-gottem-adapters-browseruse = { path = "../gottem-adapters-browseruse", version = "0.1.7" }
-gottem-routes-builtin      = { path = "../gottem-routes-builtin", version = "0.1.7", features = ["all"] }
+gottem-core                = { path = "../gottem-core", version = "0.1.9" }
+gottem-adapters-http       = { path = "../gottem-adapters-http", version = "0.1.9" }
+gottem-adapters-spider     = { path = "../gottem-adapters-spider", version = "0.1.9" }
+gottem-adapters-chrome     = { path = "../gottem-adapters-chrome", version = "0.1.9", optional = true }
+gottem-adapters-captcha    = { path = "../gottem-adapters-captcha", version = "0.1.9" }
+gottem-adapters-browseruse = { path = "../gottem-adapters-browseruse", version = "0.1.9" }
+gottem-routes-builtin      = { path = "../gottem-routes-builtin", version = "0.1.9", features = ["all"] }
 
-clap        = { version = "4", features = ["derive", "env"] }
-tokio       = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
-url         = { workspace = true }
-serde_json  = { workspace = true }
-anyhow      = "1"
+clap         = { version = "4", features = ["derive", "env"] }
+tokio        = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
+url          = { workspace = true }
+serde_json   = { workspace = true }
+futures-util = { workspace = true }
+anyhow       = "1"
 # --remote mode: call the hosted API at api.gottem.dev.
 reqwest     = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 

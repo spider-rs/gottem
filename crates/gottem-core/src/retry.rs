@@ -140,6 +140,13 @@ impl LadderStrategy {
                 Err(_) => break,
             };
             for route in self.catalog.at_tier(tier) {
+                // Crawl-kind routes (HttpJsonlStreamMany, SpiderLocalCrawl) are
+                // for `Orchestrator::crawl`, never for single-URL `fetch_cheap`.
+                // Skip them in the scrape ladder so a local crawl's per-URL
+                // sub-fetch doesn't try to dispatch through a stream adapter.
+                if route.adapter.is_crawl() {
+                    continue;
+                }
                 let not_excluded = exclude.map_or(true, |id| id != route.id.as_ref());
                 if not_excluded && self.required_caps.satisfied_by(&route.caps) {
                     return Some(route.clone());

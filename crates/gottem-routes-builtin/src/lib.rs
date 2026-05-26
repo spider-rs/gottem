@@ -114,7 +114,19 @@ pub fn register_all(builder: RouteCatalogBuilder) -> Result<RouteCatalogBuilder,
     {
         b = add_dataforseo(b)?;
     }
+    // `local.crawl` is always loaded — it's the fallback engine for
+    // `CrawlEngine::Local` / `CrawlEngine::Auto`. Cost 0, depends on no
+    // external vendor; only matters if the caller installs the
+    // SpiderLocalCrawlAdapter in their crawl-adapter registry.
+    b = add_local(b)?;
     Ok(b)
+}
+
+/// Local crawl coordinator route. No vendor; uses the scrape ladder for
+/// per-URL fetches and spider's link extractor on the bytes already
+/// fetched. Always present in the builtin catalog.
+pub fn add_local(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
+    b.add_toml(include_str!("../routes/local.toml"))
 }
 
 /// Spider Cloud — JSONL streaming, Bearer auth. 4 routes spanning T4 (HTTP) → T7 (smart unblocker).

@@ -131,6 +131,78 @@ Best for: high-throughput pipelines where most fetches are cheap but the long ta
 
 ---
 
+## Crawling
+
+gottem also crawls — streaming, no in-memory accumulation. One CLI:
+
+```bash
+# Local BFS using your scrape ladder for each page.
+gottem crawl https://example.com --depth 2 --limit 50
+
+# Force the Spider Cloud /crawl endpoint (native JSONL streaming).
+gottem crawl https://example.com --engine spider-cloud --depth 3 --limit 100
+
+# Subdomains, allow/deny patterns, robots.txt.
+gottem crawl https://example.com \
+    --subdomains \
+    --allow /blog --allow /docs \
+    --deny /admin --deny '\.pdf$' \
+    --respect-robots \
+    --concurrency 8
+
+# Dynamic params forwarded to the route body template — vendor-specific knobs
+# without editing the TOML.
+gottem crawl https://example.com --param waitFor=2000 --param mode=chrome
+```
+
+Output is **NDJSON** to stdout — one `PageEntry` per line, flushed immediately.
+Pipe to `jq`, `tee`, Postgres COPY, whatever. Memory stays constant regardless
+of crawl size.
+
+Two engines, picked by `--engine`:
+
+| Engine | What it does |
+|---|---|
+| `spider-cloud` | POSTs to Spider Cloud's `/crawl` and streams the JSONL response back. Single round-trip per crawl, vendor handles fanout. Requires `SPIDER_CLOUD_API_KEY`. |
+| `local` | BFS owned by gottem: every URL goes through the *same scrape ladder* you'd use for a one-off `fetch`, so per-page escalation (T0 → T7) still works mid-crawl. Link discovery uses [`spider::page::Page::links`](https://docs.rs/spider) on bytes already returned — no re-fetch for outlink extraction. Visited / depth / allow / deny / robots / budget all delegated to `spider::website::Website`. |
+| `auto` | Spider Cloud if the key is set, else local. (Default.) |
+
+Library use — subscriber sugar over the raw `Stream`:
+
+```rust
+use std::sync::Arc;
+use gottem_core::{CancelToken, ControlFlow, CrawlRequest, Orchestrator};
+use url::Url;
+
+let orch: Arc<Orchestrator> = /* built with crawl adapters installed */;
+orch.crawl_builder(
+        CrawlRequest::new(Url::parse("https://example.com")?)
+            .with_limit(50)
+            .with_depth(2),
+    )
+    .on_page(|page| async move {
+        save_to_db(page).await;
+        ControlFlow::Continue
+    })
+    .run(CancelToken::new())
+    .await?;
+```
+
+Or the raw stream:
+
+```rust
+let mut stream = orch.crawl(req, CancelToken::new()).await?;
+while let Some(page) = futures_util::StreamExt::next(&mut stream).await {
+    /* ... */
+}
+```
+
+The crawl never grows memory beyond what the consumer is holding — pages
+flow through, are yielded, and dropped. The local engine runs N concurrent
+workers (`--concurrency`, default 4) on the multi-threaded runtime.
+
+---
+
 ## CAPTCHA chains
 
 gottem ships a 2Captcha adapter at T9 that you compose into your pipeline when a vendor returns a challenge page:

@@ -49,6 +49,8 @@ enum Cmd {
     Fetch(FetchArgs),
     /// Try each tier in order and report which one returns valid content (mirror of spider-cli's probe_tiers.py).
     Probe(ProbeArgs),
+    /// Crawl a site — streaming NDJSON, one PageEntry per line.
+    Crawl(CrawlArgs),
     /// Inspect the route catalog.
     Routes {
         #[command(subcommand)]
@@ -162,6 +164,94 @@ enum Format {
     Json,
 }
 
+// ----- crawl ----------------------------------------------------------------
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum CrawlEngineArg {
+    /// Pick Spider Cloud if `SPIDER_CLOUD_API_KEY` is set, else Local.
+    Auto,
+    /// Spider Cloud's `/crawl` endpoint (native JSONL streaming).
+    SpiderCloud,
+    /// Local BFS using the orchestrator's scrape ladder + spider's link
+    /// extractor.
+    Local,
+}
+
+impl From<CrawlEngineArg> for gottem_core::CrawlEngine {
+    fn from(v: CrawlEngineArg) -> Self {
+        match v {
+            CrawlEngineArg::Auto => gottem_core::CrawlEngine::Auto,
+            CrawlEngineArg::SpiderCloud => gottem_core::CrawlEngine::SpiderCloud,
+            CrawlEngineArg::Local => gottem_core::CrawlEngine::Local,
+        }
+    }
+}
+
+#[derive(clap::Args)]
+struct CrawlArgs {
+    /// Seed URL.
+    url: String,
+
+    /// Max pages to emit (0 = unlimited).
+    #[arg(long, default_value_t = 10)]
+    limit: u32,
+
+    /// Max link depth from the seed (0 = seed only).
+    #[arg(long, default_value_t = 2)]
+    depth: u32,
+
+    /// Follow links into subdomains of the seed host.
+    #[arg(long)]
+    subdomains: bool,
+
+    /// Follow links across same TLD (e.g. `.com` siblings).
+    #[arg(long)]
+    tld: bool,
+
+    /// Whitelist patterns — repeatable (`--allow /blog --allow /docs`).
+    #[arg(long)]
+    allow: Vec<String>,
+
+    /// Blacklist patterns — repeatable (`--deny /admin --deny '\\.pdf$'`).
+    #[arg(long)]
+    deny: Vec<String>,
+
+    /// Honor `robots.txt`. Local engine fetches/parses; Spider Cloud
+    /// forwards as `respect_robots_txt`.
+    #[arg(long)]
+    respect_robots: bool,
+
+    /// Which engine to dispatch through.
+    #[arg(long, value_enum, default_value_t = CrawlEngineArg::Auto)]
+    engine: CrawlEngineArg,
+
+    /// Worker concurrency for the local engine (URLs fetched in parallel).
+    /// Ignored by the Spider Cloud engine.
+    #[arg(long, default_value_t = 4)]
+    concurrency: u32,
+
+    /// Dynamic per-request param — repeatable `--param k=v` pairs forwarded
+    /// to the route's body template as `{{param:k}}`. Use this to override
+    /// vendor-specific knobs without editing the TOML.
+    #[arg(long, value_parser = parse_kv)]
+    param: Vec<(String, String)>,
+
+    /// Hard ceiling on cumulative per-page cost in milli-cents.
+    #[arg(long, default_value_t = 100_000)]
+    budget_mc: u64,
+
+    /// Cap on retries for each per-URL fetch via the scrape ladder
+    /// (used by the local engine).
+    #[arg(long, default_value_t = 5)]
+    max_retries: u32,
+}
+
+fn parse_kv(s: &str) -> std::result::Result<(String, String), String> {
+    s.split_once('=')
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .ok_or_else(|| format!("expected key=value, got: {s}"))
+}
+
 // ----- probe ----------------------------------------------------------------
 
 #[derive(clap::Args)]
@@ -197,6 +287,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Cmd::Fetch(args) => run_fetch(args, config).await,
         Cmd::Probe(args) => run_probe(args, config).await,
+        Cmd::Crawl(args) => run_crawl(args, config).await,
         Cmd::Routes { action } => run_routes(action, config),
     }
 }
@@ -654,6 +745,102 @@ fn routes_show(catalog: &RouteCatalog, id: &str) -> Result<()> {
         }
     }
     println!("validators   : {}", describe_validators(&r.validate));
+    Ok(())
+}
+
+// ============================================================================
+// crawl
+// ============================================================================
+
+async fn run_crawl(args: CrawlArgs, config_path: Option<&std::path::Path>) -> Result<()> {
+    use futures_util::StreamExt;
+    use gottem_core::{CrawlAdapterRegistry, CrawlRequest};
+
+    let catalog = build_catalog(config_path)?;
+    let adapters = build_adapters();
+    let budget = Arc::new(gottem_core::Budget::new(args.budget_mc));
+    let orch = Arc::new(Orchestrator::new(catalog.clone(), adapters, budget));
+
+    // Build and install the crawl-adapter registry. Both http-many (Spider
+    // Cloud) and local crawl are registered; engine choice at runtime picks
+    // which one runs per request.
+    let mut crawl_reg = CrawlAdapterRegistry::new();
+    gottem_adapters_http::register_crawl_all(
+        &mut crawl_reg,
+        Some(gottem_adapters_http::build_default_client()),
+    );
+    gottem_adapters_spider::register_crawl_all(&mut crawl_reg, &orch);
+    orch.install_crawl_adapters(Arc::new(crawl_reg));
+
+    let seed = Url::parse(&args.url).with_context(|| format!("invalid URL: {}", args.url))?;
+    let mut req = CrawlRequest::new(seed)
+        .with_limit(args.limit)
+        .with_depth(args.depth)
+        .with_subdomains(args.subdomains)
+        .with_tld(args.tld)
+        .with_allow(args.allow.clone())
+        .with_deny(args.deny.clone())
+        .with_respect_robots(args.respect_robots)
+        .with_engine(args.engine.clone().into())
+        .with_concurrency(args.concurrency);
+    // Thread the user's --param k=v entries into the embedded scrape
+    // request's `extra` map so route body templates `{{param:k}}` resolve.
+    for (k, v) in &args.param {
+        // Numeric / bool tokens land as their JSON scalar; anything else
+        // remains a string. This lets `--param limit=50` produce a bare
+        // `50` in JSON bodies, while `--param mode=chrome` stays
+        // `"chrome"` inside the caller's quotes.
+        let value: serde_json::Value = serde_json::from_str(v)
+            .unwrap_or_else(|_| serde_json::Value::String(v.clone()));
+        req.scrape.extra.insert(k.clone(), value);
+    }
+
+    let cancel = install_signal_handler();
+    let started = Instant::now();
+    let mut stream = orch
+        .crawl(req, cancel.clone())
+        .await
+        .with_context(|| "starting crawl")?;
+
+    // Streaming NDJSON to stdout — one PageEntry per line, flushed
+    // immediately. Memory stays constant regardless of crawl size.
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    let mut pages = 0u32;
+    let mut errors = 0u32;
+    while let Some(item) = stream.next().await {
+        match item {
+            Ok(page) => {
+                pages = pages.saturating_add(1);
+                let line = serde_json::json!({
+                    "url": page.url.as_str(),
+                    "depth": page.depth,
+                    "status": page.status,
+                    "content": String::from_utf8_lossy(
+                        page.content.as_deref().unwrap_or(&page.body),
+                    ),
+                    "links": page.links.as_ref().map(|ls| {
+                        ls.iter().map(|u| u.as_str()).collect::<Vec<_>>()
+                    }),
+                    "route_id": page.route_id.as_ref(),
+                    "tier": u8::from(page.tier),
+                    "cost_milli": page.cost_milli,
+                    "elapsed_ms": page.elapsed.as_millis() as u64,
+                });
+                use std::io::Write;
+                writeln!(out, "{line}").ok();
+                out.flush().ok();
+            }
+            Err(e) => {
+                errors = errors.saturating_add(1);
+                eprintln!("crawl error: {e}");
+            }
+        }
+    }
+    eprintln!(
+        "crawl finished: {pages} pages, {errors} errors, {:?}",
+        started.elapsed()
+    );
     Ok(())
 }
 

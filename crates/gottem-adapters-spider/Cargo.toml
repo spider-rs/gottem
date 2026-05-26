@@ -1,6 +1,6 @@
 [package]
 name = "gottem-adapters-spider"
-version = "0.1.7"
+version = "0.1.9"
 description = "gottem adapter that dispatches through spider::Website for full local power (T0-T3)."
 readme = "README.md"
 edition.workspace = true
@@ -10,22 +10,180 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core = { path = "../gottem-core", version = "0.1.7" }
-spider      = { workspace = true, features = ["basic"] }
-async-trait = { workspace = true }
-bytes       = { workspace = true }
-url         = { workspace = true }
-tokio       = { workspace = true }
-http        = { workspace = true }
+gottem-core  = { path = "../gottem-core", version = "0.1.9" }
+spider       = { workspace = true, features = ["basic"] }
+async-trait  = { workspace = true }
+bytes        = { workspace = true }
+url          = { workspace = true }
+tokio        = { workspace = true, features = ["rt", "sync", "macros"] }
+http         = { workspace = true }
+reqwest      = { workspace = true }
+futures-core = { workspace = true }
 
 [features]
 default = []
-chrome  = ["spider/chrome"]
-smart   = ["spider/smart"]
+
+# ----------------------------------------------------------------------------
+# Spider feature forwarding.
+#
+# Mirror the non-`decentralized` portion of spider's feature surface so gottem
+# users can opt into anything spider exposes without touching spider directly.
+# Decentralized variants (`decentralized`, `decentralized_headers`, `flexbuffers`)
+# are intentionally not forwarded — gottem's model is a single orchestrator,
+# not a worker mesh, so those don't apply.
+#
+# Naming: each feature here is named exactly as in spider so `cargo add
+# gottem-adapters-spider --features <name>` reads the same as `cargo add
+# spider --features <name>`.
+# ----------------------------------------------------------------------------
+
+# Chrome / CDP
+chrome                    = ["spider/chrome"]
+chrome_headed             = ["spider/chrome_headed"]
+chrome_cpu                = ["spider/chrome_cpu"]
+chrome_stealth            = ["spider/chrome_stealth"]
+chrome_screenshot         = ["spider/chrome_screenshot"]
+chrome_store_page         = ["spider/chrome_store_page"]
+chrome_intercept          = ["spider/chrome_intercept"]
+chrome_headless_new       = ["spider/chrome_headless_new"]
+chrome_simd               = ["spider/chrome_simd"]
+chrome_tls_connection     = ["spider/chrome_tls_connection"]
+chrome_serde_stacker      = ["spider/chrome_serde_stacker"]
+
+# WebDriver / Selenium
+webdriver                 = ["spider/webdriver"]
+webdriver_headed          = ["spider/webdriver_headed"]
+webdriver_stealth         = ["spider/webdriver_stealth"]
+webdriver_chrome          = ["spider/webdriver_chrome"]
+webdriver_firefox         = ["spider/webdriver_firefox"]
+webdriver_edge            = ["spider/webdriver_edge"]
+webdriver_screenshot      = ["spider/webdriver_screenshot"]
+
+# Smart / agent
+smart                     = ["spider/smart"]
+real_browser              = ["spider/real_browser"]
+adblock                   = ["spider/adblock"]
+adblock_easylist          = ["spider/adblock_easylist"]
+spoof                     = ["spider/spoof"]
+
+# Crawl-side knobs
+sitemap                   = ["spider/sitemap"]
+robots_cache              = ["spider/robots_cache"]
+regex                     = ["spider/regex"]
+glob                      = ["spider/glob"]
+balance                   = ["spider/balance"]
+disk                      = ["spider/disk"]
+disk_native_tls           = ["spider/disk_native_tls"]
+disk_aws                  = ["spider/disk_aws"]
+sync                      = ["spider/sync"]
+cookies                   = ["spider/cookies"]
+encoding                  = ["spider/encoding"]
+ua_generator              = ["spider/ua_generator"]
+headers                   = ["spider/headers"]
+remote_addr               = ["spider/remote_addr"]
+control                   = ["spider/control"]
+time                      = ["spider/time"]
+socks                     = ["spider/socks"]
+fs                        = ["spider/fs"]
+full_resources            = ["spider/full_resources"]
+firewall                  = ["spider/firewall"]
+cron                      = ["spider/cron"]
+cmd                       = ["spider/cmd"]
+extra_information         = ["spider/extra_information"]
+page_error_status_details = ["spider/page_error_status_details"]
+llm_json                  = ["spider/llm_json"]
+
+# Caching
+cache                     = ["spider/cache"]
+cache_mem                 = ["spider/cache_mem"]
+cache_request             = ["spider/cache_request"]
+cache_chrome_hybrid       = ["spider/cache_chrome_hybrid"]
+cache_chrome_hybrid_mem   = ["spider/cache_chrome_hybrid_mem"]
+cache_openai              = ["spider/cache_openai"]
+cache_gemini              = ["spider/cache_gemini"]
+
+# AI integrations
+openai                    = ["spider/openai"]
+openai_slim_fit           = ["spider/openai_slim_fit"]
+gemini                    = ["spider/gemini"]
+
+# Search providers
+search                    = ["spider/search"]
+search_serper             = ["spider/search_serper"]
+search_brave              = ["spider/search_brave"]
+search_bing               = ["spider/search_bing"]
+search_tavily             = ["spider/search_tavily"]
+
+# Spider Cloud integration
+spider_cloud              = ["spider/spider_cloud"]
+
+# DNS / TLS / network
+dns_cache                 = ["spider/dns_cache"]
+reqwest_rustls_tls        = ["spider/reqwest_rustls_tls"]
+reqwest_native_tls        = ["spider/reqwest_native_tls"]
+reqwest_native_tls_alpn   = ["spider/reqwest_native_tls_alpn"]
+reqwest_native_tls_vendored = ["spider/reqwest_native_tls_vendored"]
+reqwest_native_tls_manual_roots = ["spider/reqwest_native_tls_manual_roots"]
+reqwest_native_tls_webpki_roots = ["spider/reqwest_native_tls_webpki_roots"]
+reqwest_native_tls_native_roots = ["spider/reqwest_native_tls_native_roots"]
+reqwest_hickory_dns       = ["spider/reqwest_hickory_dns"]
+reqwest_multipart         = ["spider/reqwest_multipart"]
+reqwest_json              = ["spider/reqwest_json"]
+
+# Concurrency / scheduling
+adaptive_concurrency      = ["spider/adaptive_concurrency"]
+priority_frontier         = ["spider/priority_frontier"]
+hedge                     = ["spider/hedge"]
+rate_limit                = ["spider/rate_limit"]
+request_coalesce          = ["spider/request_coalesce"]
+auto_throttle             = ["spider/auto_throttle"]
+wait_guard                = ["spider/wait_guard"]
+parallel_backends         = ["spider/parallel_backends"]
+parallel_backends_full    = ["spider/parallel_backends_full"]
+cowboy                    = ["spider/cowboy"]
+h2_multiplex              = ["spider/h2_multiplex"]
+bloom                     = ["spider/bloom"]
+numa                      = ["spider/numa"]
+zero_copy                 = ["spider/zero_copy"]
+io_uring                  = ["spider/io_uring"]
+tcp_fastopen              = ["spider/tcp_fastopen"]
+splice                    = ["spider/splice"]
+simd                      = ["spider/simd"]
+warc                      = ["spider/warc"]
+etag_cache                = ["spider/etag_cache"]
+tracing                   = ["spider/tracing"]
+inline-more               = ["spider/inline-more"]
+
+# Wreq alternative client
+wreq                      = ["spider/wreq"]
+rquest_hickory_dns        = ["spider/rquest_hickory_dns"]
+
+# String interner backends
+string_interner_buffer_backend = ["spider/string_interner_buffer_backend"]
+string_interner_string_backend = ["spider/string_interner_string_backend"]
+string_interner_bucket_backend = ["spider/string_interner_bucket_backend"]
+
+# Agent (sub-features depend on `agent`)
+agent                     = ["spider/agent"]
+agent_openai              = ["spider/agent_openai"]
+agent_chrome              = ["spider/agent_chrome"]
+agent_webdriver           = ["spider/agent_webdriver"]
+agent_skills              = ["spider/agent_skills"]
+agent_skills_s3           = ["spider/agent_skills_s3"]
+agent_fs                  = ["spider/agent_fs"]
+agent_search_serper       = ["spider/agent_search_serper"]
+agent_search_brave        = ["spider/agent_search_brave"]
+agent_search_bing         = ["spider/agent_search_bing"]
+agent_search_tavily       = ["spider/agent_search_tavily"]
+agent_full                = ["spider/agent_full"]
+
+# Servo backend
+servo                     = ["spider/servo"]
 
 [dev-dependencies]
-wiremock = "0.6"
-tokio    = { workspace = true, features = ["rt-multi-thread", "macros"] }
+wiremock     = "0.6"
+tokio        = { workspace = true, features = ["rt-multi-thread", "macros"] }
+futures-util = { workspace = true }
 
 [lints.rust]
 unsafe_code = "forbid"

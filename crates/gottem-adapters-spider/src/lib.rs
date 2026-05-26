@@ -47,6 +47,21 @@ use gottem_core::{
     ScrapeResponse,
 };
 
+mod local_crawl;
+pub use local_crawl::SpiderLocalCrawlAdapter;
+
+/// Convenience: register the local-crawl adapter into a [`CrawlAdapterRegistry`]
+/// with the orchestrator's default ladder strategy. Call this after building
+/// the orchestrator so the adapter can take a weak back-reference to it.
+///
+/// [`CrawlAdapterRegistry`]: gottem_core::CrawlAdapterRegistry
+pub fn register_crawl_all(
+    reg: &mut gottem_core::CrawlAdapterRegistry,
+    orch: &Arc<gottem_core::Orchestrator>,
+) {
+    reg.register(SpiderLocalCrawlAdapter::arc(orch));
+}
+
 /// Single-page adapter. One [`spider::Client`] is built per adapter instance and reused
 /// across every call — connection pooling, DNS caching, and cookie state all persist.
 #[derive(Debug, Clone)]

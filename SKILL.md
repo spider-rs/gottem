@@ -57,6 +57,36 @@ gottem probe <URL> [--tier-min N --tier-max M] [--min-bytes 500]
 Walks tiers reporting which routes succeed, without committing to a full fetch —
 use it to discover the cheapest route that works for a domain.
 
+## crawl — multi-page, streaming, never in-memory
+
+```sh
+gottem crawl <URL> [--depth N] [--limit M] [--engine auto|spider-cloud|local]
+                   [--subdomains] [--tld]
+                   [--allow PAT --allow PAT ...]
+                   [--deny PAT --deny PAT ...]
+                   [--respect-robots]
+                   [--concurrency N]
+                   [--param k=v --param k=v ...]
+```
+
+Streams **NDJSON** to stdout, one `PageEntry` per line, flushed immediately.
+Memory stays constant regardless of crawl size.
+
+Engines:
+
+- `spider-cloud` — POST to Spider Cloud's `/crawl`, stream JSONL back. Vendor
+  handles fanout; single network round-trip per crawl.
+- `local` — gottem-owned BFS. Each URL goes through the **same scrape ladder**
+  as `gottem fetch`, so per-page escalation works mid-crawl. Link discovery
+  uses `spider::page::Page::links` on bytes already fetched — no re-fetch for
+  outlinks. Visited / depth / allow / deny / robots / budget all delegated to
+  `spider::website::Website`.
+- `auto` — Spider Cloud if `SPIDER_CLOUD_API_KEY` is set, else local. Default.
+
+`--param k=v` repeatable; values land in the route body template as
+`{{param:k}}` (numbers and JSON literals parse correctly; everything else is a
+string). Use this for vendor-specific knobs without editing TOML.
+
 ## routes — inspect the vendor catalog
 
 ```sh

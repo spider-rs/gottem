@@ -176,10 +176,21 @@ pub enum AdapterKind {
     HttpJson,
     /// POST JSON body, parse chunked JSONL stream. Spider Cloud requires this — `.json()` will hang.
     HttpJsonlStream,
+    /// POST JSON body, parse chunked JSONL stream, emit **one [`PageEntry`] per line**.
+    /// Used by `spider.cloud.crawl` — the only vendor in gottem that natively streams
+    /// many pages from one request. Other vendors stay single-page in the scrape catalog.
+    ///
+    /// [`PageEntry`]: crate::PageEntry
+    HttpJsonlStreamMany,
     /// Connect to a Chrome WebSocket endpoint (local or Browserless/Brightdata Scraping Browser).
     ChromeCdp,
     /// Dispatch through `spider::Website` for full local power (stealth, fingerprint, intercept, anti-bot).
     SpiderLocal,
+    /// Local BFS crawl: uses gottem's existing scrape ladder for each URL and spider's
+    /// link-extraction primitives ([`Page::links`](spider::page::Page::links)) on the
+    /// bytes already fetched. Never re-fetches a URL just to discover links. Tracks
+    /// visited / depth / allow / deny / robots via `spider::website::Website`.
+    SpiderLocalCrawl,
     /// Escape hatch for user-registered adapters.
     Custom(Arc<str>),
 }
@@ -190,10 +201,20 @@ impl AdapterKind {
             Self::DirectHttp => "direct_http",
             Self::HttpJson => "http_json",
             Self::HttpJsonlStream => "http_jsonl_stream",
+            Self::HttpJsonlStreamMany => "http_jsonl_stream_many",
             Self::ChromeCdp => "chrome_cdp",
             Self::SpiderLocal => "spider_local",
+            Self::SpiderLocalCrawl => "spider_local_crawl",
             Self::Custom(s) => s,
         }
+    }
+
+    /// Whether this adapter emits a stream of [`PageEntry`](crate::PageEntry)
+    /// (crawl) vs. a single [`ScrapeResponse`](crate::ScrapeResponse) (scrape).
+    /// Used by the orchestrator + catalog validation to dispatch through the
+    /// right registry.
+    pub fn is_crawl(&self) -> bool {
+        matches!(self, Self::HttpJsonlStreamMany | Self::SpiderLocalCrawl)
     }
 }
 
@@ -210,8 +231,10 @@ impl<'de> Deserialize<'de> for AdapterKind {
             "direct_http" => Self::DirectHttp,
             "http_json" => Self::HttpJson,
             "http_jsonl_stream" => Self::HttpJsonlStream,
+            "http_jsonl_stream_many" => Self::HttpJsonlStreamMany,
             "chrome_cdp" => Self::ChromeCdp,
             "spider_local" => Self::SpiderLocal,
+            "spider_local_crawl" => Self::SpiderLocalCrawl,
             _ => Self::Custom(Arc::from(s)),
         })
     }
@@ -266,6 +289,10 @@ pub enum ResponseParse {
     JsonPath { path: String },
     /// First non-empty JSONL line, then dotted path into that record. Spider Cloud format.
     JsonlFirst { path: String },
+    /// Every non-empty JSONL line as a separate record. Path is the dotted field
+    /// inside each record to use as `PageEntry::content` (use `$` to keep the
+    /// whole record as content). Used by `spider.cloud.crawl`'s multi-page stream.
+    JsonlEach { path: String },
     /// Body is already markdown — pass through.
     Markdown,
     /// Body is HTML — pass through.

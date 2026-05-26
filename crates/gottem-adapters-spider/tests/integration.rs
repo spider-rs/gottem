@@ -236,3 +236,235 @@ async fn body_preserves_original_content() {
         "content did not contain the original payload"
     );
 }
+
+// ============================================================================
+// SpiderLocalCrawlAdapter — local BFS, no re-fetch for link extraction
+// ============================================================================
+//
+// These tests build a real Orchestrator with the SpiderAdapter registered for
+// per-URL fetches, register the SpiderLocalCrawlAdapter for crawl dispatch, and
+// run a small crawl against a wiremock server. The mock serves a tiny site:
+//
+//   /          → links to /a and /b
+//   /a         → links to /c
+//   /b         → no links
+//   /c         → no links
+//
+// With depth=2, limit=10 we expect all 4 pages to be yielded exactly once.
+
+use futures_util::StreamExt;
+use gottem_adapters_spider::{register_crawl_all, SpiderLocalCrawlAdapter};
+use gottem_core::{
+    AdapterRegistry, Budget, CrawlAdapterRegistry, CrawlRequest, Orchestrator, RouteCatalogBuilder,
+};
+use wiremock::matchers::path_regex;
+
+fn local_route(server_url: &str) -> Route {
+    Route {
+        id: Arc::from("local.http"),
+        adapter: AdapterKind::SpiderLocal,
+        endpoint: EndpointTemplate::parse(server_url).unwrap(),
+        method: HttpMethod::Get,
+        auth: Default::default(),
+        headers: vec![],
+        body: Default::default(),
+        parse: Default::default(),
+        // No min-byte gate — our test HTML is intentionally small.
+        validate: vec![],
+        tier: Tier::T0,
+        cost: 0,
+        priority: 100,
+        caps: Capabilities::default(),
+        timeout_ms: 5_000,
+        concurrency: 4,
+        retry_on: Default::default(),
+        cost_extract: None,
+    }
+}
+
+fn crawl_route() -> Route {
+    Route {
+        id: Arc::from("local.crawl"),
+        adapter: AdapterKind::SpiderLocalCrawl,
+        endpoint: EndpointTemplate::parse("https://local.crawl/").unwrap(),
+        method: HttpMethod::Get,
+        auth: Default::default(),
+        headers: vec![],
+        body: Default::default(),
+        parse: Default::default(),
+        validate: vec![],
+        tier: Tier::T0,
+        cost: 0,
+        priority: 0,
+        caps: Capabilities::default(),
+        timeout_ms: 60_000,
+        concurrency: 4,
+        retry_on: Default::default(),
+        cost_extract: None,
+    }
+}
+
+async fn build_local_crawl_harness() -> (Arc<Orchestrator>, MockServer) {
+    let server = MockServer::start().await;
+    // Root → /a + /b
+    Mock::given(method("GET"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            format!(
+                "<html><body><a href=\"{srv}/a\">a</a><a href=\"{srv}/b\">b</a></body></html>",
+                srv = server.uri()
+            )
+            .as_bytes(),
+            "text/html",
+        ))
+        .mount(&server)
+        .await;
+    // /a → /c
+    Mock::given(method("GET"))
+        .and(path("/a"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            format!(
+                "<html><body><a href=\"{srv}/c\">c</a></body></html>",
+                srv = server.uri()
+            )
+            .as_bytes(),
+            "text/html",
+        ))
+        .mount(&server)
+        .await;
+    // /b — leaf
+    Mock::given(method("GET"))
+        .and(path("/b"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(b"<html><body>b leaf</body></html>", "text/html"),
+        )
+        .mount(&server)
+        .await;
+    // /c — leaf
+    Mock::given(method("GET"))
+        .and(path("/c"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_raw(b"<html><body>c leaf</body></html>", "text/html"),
+        )
+        .mount(&server)
+        .await;
+    // Catch-all so any stray request fails clearly instead of looping
+    Mock::given(method("GET"))
+        .and(path_regex("/.*"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+
+    let catalog = Arc::new(
+        RouteCatalogBuilder::new()
+            .add(local_route(&server.uri()))
+            .add(crawl_route())
+            .build(),
+    );
+    let mut adapters = AdapterRegistry::new();
+    adapters.register(SpiderAdapter::arc());
+    let orch = Arc::new(Orchestrator::new(
+        catalog,
+        Arc::new(adapters),
+        Arc::new(Budget::new(10_000)),
+    ));
+
+    let mut crawl_reg = CrawlAdapterRegistry::new();
+    register_crawl_all(&mut crawl_reg, &orch);
+    orch.install_crawl_adapters(Arc::new(crawl_reg));
+
+    (orch, server)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn local_crawl_visits_full_site_within_depth() {
+    let (orch, server) = build_local_crawl_harness().await;
+
+    let req = CrawlRequest::new(Url::parse(&server.uri()).unwrap())
+        .with_limit(10)
+        .with_depth(2)
+        .with_concurrency(4)
+        .with_engine(gottem_core::CrawlEngine::Local);
+
+    let mut stream = orch.crawl(req, CancelToken::new()).await.unwrap();
+    let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+    while let Some(item) = stream.next().await {
+        let entry = item.expect("page entry");
+        visited.insert(entry.url.path().to_string());
+    }
+
+    // We should see seed + a + b + c — exactly 4 distinct paths.
+    // (spider may normalize trailing slashes; check both forms for seed.)
+    let saw_seed = visited.contains("/") || visited.contains("");
+    assert!(saw_seed, "missing seed; visited: {visited:?}");
+    assert!(visited.contains("/a"), "missing /a; visited: {visited:?}");
+    assert!(visited.contains("/b"), "missing /b; visited: {visited:?}");
+    assert!(visited.contains("/c"), "missing /c; visited: {visited:?}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn local_crawl_respects_depth_zero() {
+    let (orch, server) = build_local_crawl_harness().await;
+
+    // depth = 0 → seed only, no link following.
+    let req = CrawlRequest::new(Url::parse(&server.uri()).unwrap())
+        .with_limit(10)
+        .with_depth(0)
+        .with_engine(gottem_core::CrawlEngine::Local);
+
+    let mut stream = orch.crawl(req, CancelToken::new()).await.unwrap();
+    let mut count = 0;
+    while let Some(item) = stream.next().await {
+        item.expect("page entry");
+        count += 1;
+    }
+    assert_eq!(count, 1, "depth=0 should yield only the seed");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn local_crawl_respects_limit() {
+    let (orch, server) = build_local_crawl_harness().await;
+
+    // limit = 2 → at most 2 pages emitted.
+    let req = CrawlRequest::new(Url::parse(&server.uri()).unwrap())
+        .with_limit(2)
+        .with_depth(2)
+        .with_engine(gottem_core::CrawlEngine::Local);
+
+    let mut stream = orch.crawl(req, CancelToken::new()).await.unwrap();
+    let mut count = 0;
+    while let Some(item) = stream.next().await {
+        item.expect("page entry");
+        count += 1;
+    }
+    assert!(count <= 2, "limit=2 should yield at most 2 pages, got {count}");
+    assert!(count >= 1, "limit=2 should yield at least the seed");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn local_crawl_engine_falls_back_to_local_when_no_spider_cloud_key() {
+    // Auto engine + no SPIDER_CLOUD_API_KEY → Local
+    std::env::remove_var("SPIDER_CLOUD_API_KEY");
+    let (orch, server) = build_local_crawl_harness().await;
+
+    let req = CrawlRequest::new(Url::parse(&server.uri()).unwrap())
+        .with_limit(10)
+        .with_depth(1)
+        .with_engine(gottem_core::CrawlEngine::Auto);
+
+    let mut stream = orch.crawl(req, CancelToken::new()).await.unwrap();
+    let mut got_seed = false;
+    while let Some(item) = stream.next().await {
+        let entry = item.expect("page entry");
+        if entry.url.as_str().starts_with(&server.uri()) {
+            got_seed = true;
+        }
+        assert_eq!(entry.route_id.as_ref(), "local.crawl");
+    }
+    assert!(got_seed, "auto should have fallen back to local engine and visited the seed");
+}
+
+#[allow(dead_code)]
+fn _unused(_: SpiderLocalCrawlAdapter) {}

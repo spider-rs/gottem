@@ -177,6 +177,18 @@ fn parse_content_with(
                 .map(|s| Some(Bytes::from(s.into_bytes())))
                 .ok_or_else(|| FetchError::Parse(format!("no value at path {path}")))
         }
+        // JsonlEach is the parse spec for streaming-many crawl routes — the
+        // many-stream adapter walks records itself and never lands here. Fall
+        // back to first-record behavior so a misconfigured single-page route
+        // still produces *something* sensible instead of erroring.
+        ResponseParse::JsonlEach { path } => {
+            let v = first
+                .ok_or_else(|| FetchError::Parse("no valid JSON line in JSONL body".into()))?;
+            let ptr = dotted_to_pointer(path);
+            value_at(v, &ptr)
+                .map(|s| Some(Bytes::from(s.into_bytes())))
+                .ok_or_else(|| FetchError::Parse(format!("no value at path {path}")))
+        }
     }
 }
 

@@ -1,0 +1,26 @@
+# Local crawl route — gottem's own BFS using spider's link tracking
+# primitives. No external API; uses the orchestrator's scrape ladder for
+# per-URL fetching and `spider::page::Page::links` for link extraction
+# from already-fetched bytes.
+#
+# This is the catalog entry that `Orchestrator::crawl` looks up when
+# `CrawlEngine::Local` is selected (or when `Auto` falls back to local
+# because no Spider Cloud key is resolvable).
+#
+# Tier 0 / cost 0 — local crawl coordination itself is free; per-URL
+# fetch cost flows through whichever scrape route the ladder picks for
+# each child URL.
+
+[[route]]
+id          = "local.crawl"
+adapter     = "spider_local_crawl"
+endpoint    = "https://local.crawl/"   # placeholder — adapter ignores this
+method      = "GET"
+tier        = 0
+cost        = 0
+priority    = 0
+timeout_ms  = 600000
+concurrency = 16
+
+[route.parse]
+kind = "raw_text"

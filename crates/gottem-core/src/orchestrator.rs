@@ -1,16 +1,17 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use futures_util::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::Semaphore;
 
 use crate::{
-    adapter::{AdapterContext, AdapterRegistry},
+    adapter::{AdapterContext, AdapterRegistry, CrawlAdapterRegistry, PageEntryStream},
     budget::Budget,
     cancel::CancelToken,
     catalog::RouteCatalog,
     circuit::CircuitBreaker,
+    crawl::{CrawlBuilder, CrawlEngine, CrawlRequest},
     error::FetchError,
     request::ScrapeRequest,
     response::ScrapeResponse,
@@ -40,6 +41,9 @@ pub enum Mode {
 pub struct Orchestrator {
     catalog: Arc<RouteCatalog>,
     adapters: Arc<AdapterRegistry>,
+    /// Set once via [`Orchestrator::install_crawl_adapters`]. Unset orchestrators
+    /// can still serve scrape requests — only `crawl()` requires it.
+    crawl_adapters: OnceLock<Arc<CrawlAdapterRegistry>>,
     semaphores: HashMap<RouteId, Arc<Semaphore>>,
     breakers: HashMap<RouteId, Arc<CircuitBreaker>>,
     hedge_tracker: Arc<HedgeTracker>,
@@ -68,6 +72,7 @@ impl Orchestrator {
         Self {
             catalog,
             adapters,
+            crawl_adapters: OnceLock::new(),
             semaphores,
             breakers,
             hedge_tracker: Arc::new(HedgeTracker::new(2.0, 8)),
@@ -76,8 +81,26 @@ impl Orchestrator {
         }
     }
 
+    /// Install the crawl-adapter registry. Idempotent — only the first call
+    /// takes effect (subsequent calls are silently ignored). Call this once,
+    /// after constructing the orchestrator, before `crawl()` is invoked.
+    /// Scrape-only callers can skip this entirely.
+    pub fn install_crawl_adapters(&self, reg: Arc<CrawlAdapterRegistry>) {
+        let _ = self.crawl_adapters.set(reg);
+    }
+
+    pub fn crawl_adapters(&self) -> Option<&Arc<CrawlAdapterRegistry>> {
+        self.crawl_adapters.get()
+    }
+
     pub fn catalog(&self) -> &RouteCatalog {
         &self.catalog
+    }
+
+    /// Access the shared catalog Arc directly — useful for handing the same
+    /// catalog to a [`LadderStrategy`] without re-wrapping.
+    pub fn catalog_arc(&self) -> Arc<RouteCatalog> {
+        self.catalog.clone()
     }
     pub fn adapters(&self) -> &AdapterRegistry {
         &self.adapters
@@ -453,6 +476,97 @@ impl Orchestrator {
             }
         }
         Err(last_err.unwrap_or(FetchError::Exhausted))
+    }
+
+    // ============================================================================
+    // Crawl dispatch
+    // ============================================================================
+
+    /// Begin a crawl. Returns a stream of [`PageEntry`](crate::PageEntry) results
+    /// — one yield per page discovered/fetched. Streaming-only: no in-memory
+    /// accumulation, no race/hedge across engines (single engine per crawl,
+    /// per-page escalation happens *inside* the local engine via the scrape
+    /// ladder).
+    ///
+    /// Dispatch:
+    ///
+    /// - [`CrawlEngine::SpiderCloud`] — looks up the `spider.cloud.crawl` route
+    ///   and dispatches via the registered crawl adapter for `HttpJsonlStreamMany`.
+    /// - [`CrawlEngine::Local`] — looks up the `local.crawl` route and dispatches
+    ///   via the `SpiderLocalCrawl` adapter, which BFSes using *this* orchestrator's
+    ///   `fetch_cheap` per URL.
+    /// - [`CrawlEngine::Auto`] — picks `SpiderCloud` when `SPIDER_CLOUD_API_KEY`
+    ///   resolves on the embedded scrape request, otherwise falls back to `Local`.
+    ///
+    /// Returns [`FetchError::Config`] if the chosen route or adapter isn't
+    /// registered. Per-page errors flow through the stream as `Err` items
+    /// — they don't terminate the crawl.
+    pub async fn crawl(
+        &self,
+        req: CrawlRequest,
+        cancel: CancelToken,
+    ) -> Result<PageEntryStream, FetchError> {
+        let engine = self.resolve_crawl_engine(&req);
+        let route_id: &str = match engine {
+            CrawlEngine::SpiderCloud => "spider.cloud.crawl",
+            CrawlEngine::Local => "local.crawl",
+            CrawlEngine::Auto => unreachable!("resolve_crawl_engine never returns Auto"),
+        };
+        let route = self
+            .catalog
+            .get(route_id)
+            .ok_or_else(|| FetchError::Config(format!("crawl route not in catalog: {route_id}")))?;
+
+        let registry = self.crawl_adapters.get().ok_or_else(|| {
+            FetchError::Config(
+                "crawl adapters not installed — call Orchestrator::install_crawl_adapters before crawl()".into(),
+            )
+        })?;
+        let adapter = registry.get(&route.adapter).ok_or_else(|| {
+            FetchError::UnknownAdapter(route.adapter.as_str().into())
+        })?;
+
+        adapter.execute(&route, &req, &cancel).await
+    }
+
+    /// Builder-style entrypoint for the subscriber API.
+    ///
+    /// ```no_run
+    /// # use std::sync::Arc;
+    /// # use gottem_core::{Orchestrator, CrawlRequest, CancelToken, ControlFlow};
+    /// # use url::Url;
+    /// # async fn ex(orch: Arc<Orchestrator>) -> Result<(), Box<dyn std::error::Error>> {
+    /// let req = CrawlRequest::new(Url::parse("https://example.com")?)
+    ///     .with_limit(50)
+    ///     .with_depth(2);
+    /// orch.crawl_builder(req)
+    ///     .on_page(|page| async move {
+    ///         println!("{}", page.url);
+    ///         ControlFlow::Continue
+    ///     })
+    ///     .run(CancelToken::new())
+    ///     .await?;
+    /// # Ok(()) }
+    /// ```
+    pub fn crawl_builder(self: &Arc<Self>, req: CrawlRequest) -> CrawlBuilder {
+        CrawlBuilder::new(self.clone(), req)
+    }
+
+    /// Pick a concrete engine for a crawl request. `Auto` resolves via the
+    /// embedded scrape request's credential map first, then process env —
+    /// `SpiderCloud` if `SPIDER_CLOUD_API_KEY` is set, else `Local`.
+    fn resolve_crawl_engine(&self, req: &CrawlRequest) -> CrawlEngine {
+        match req.engine {
+            CrawlEngine::SpiderCloud => CrawlEngine::SpiderCloud,
+            CrawlEngine::Local => CrawlEngine::Local,
+            CrawlEngine::Auto => {
+                if req.scrape.resolve_env("SPIDER_CLOUD_API_KEY").is_some() {
+                    CrawlEngine::SpiderCloud
+                } else {
+                    CrawlEngine::Local
+                }
+            }
+        }
     }
 }
 

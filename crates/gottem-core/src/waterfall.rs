@@ -379,6 +379,10 @@ impl WaterfallStats {
         let domain = domain_key_from_url(url);
         let mut cohort: Vec<(Arc<Route>, Arc<RouteDomainEntry>)> = Vec::new();
         for route in catalog.all() {
+            // Crawl-kind routes are not eligible for scrape-ladder promotion.
+            if route.adapter.is_crawl() {
+                continue;
+            }
             let key = (route.id.clone(), domain);
             if let Some(entry) = self.entries.get(&key) {
                 if entry.success_count() < self.config.promotion_threshold {

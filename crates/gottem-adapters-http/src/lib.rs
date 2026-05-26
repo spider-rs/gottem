@@ -38,12 +38,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use gottem_core::{
-    Adapter, AdapterContext, AdapterKind, AdapterRegistry, CancelToken, FetchError, Route,
-    ScrapeRequest, ScrapeResponse,
+    Adapter, AdapterContext, AdapterKind, AdapterRegistry, CancelToken, CrawlAdapterRegistry,
+    FetchError, Route, ScrapeRequest, ScrapeResponse,
 };
 use reqwest::Client;
 
+mod jsonl_many;
 mod shared;
+pub use jsonl_many::HttpJsonlStreamManyAdapter;
 pub use shared::build_default_client;
 
 use shared::{
@@ -51,7 +53,7 @@ use shared::{
     HttpOutcome,
 };
 
-/// Register all three HTTP adapters into a [`AdapterRegistry`], sharing one
+/// Register all three single-page HTTP adapters into a [`AdapterRegistry`], sharing one
 /// `reqwest::Client` across them for connection pooling. Pass `None` to use the default
 /// client builder, or `Some(client)` to plug in a pre-configured one.
 pub fn register_all(reg: &mut AdapterRegistry, client: Option<Client>) {
@@ -59,6 +61,13 @@ pub fn register_all(reg: &mut AdapterRegistry, client: Option<Client>) {
     reg.register(Arc::new(DirectHttpAdapter::new(client.clone())));
     reg.register(Arc::new(HttpJsonAdapter::new(client.clone())));
     reg.register(Arc::new(HttpJsonlStreamAdapter::new(client)));
+}
+
+/// Register all crawl-capable HTTP adapters. Currently just
+/// [`HttpJsonlStreamManyAdapter`] for Spider Cloud `/crawl`.
+pub fn register_crawl_all(reg: &mut CrawlAdapterRegistry, client: Option<Client>) {
+    let client = client.unwrap_or_else(build_default_client);
+    reg.register(Arc::new(HttpJsonlStreamManyAdapter::new(client)));
 }
 
 /// Plain GET/POST adapter. Sends `req.body` directly (if any), returns the response body
