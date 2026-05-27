@@ -333,10 +333,7 @@ fn chrome_routes_load_at_t8_with_ws_endpoints() {
         .contains("{{env:BROWSERLESS_TOKEN}}"));
 
     let sbc = catalog.get("spider.browser").unwrap();
-    assert!(sbc
-        .endpoint
-        .as_str()
-        .contains("{{env:SPIDER_CLOUD_API_KEY}}"));
+    assert!(sbc.endpoint.as_str().contains("{{env:SPIDER_API_KEY}}"));
     assert!(
         sbc.caps.fingerprint,
         "spider browser cloud advertises fingerprinting"

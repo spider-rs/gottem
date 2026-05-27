@@ -493,7 +493,7 @@ impl Orchestrator {
     /// - [`CrawlEngine::Local`] — looks up the `local.crawl` route and dispatches
     ///   via the `SpiderLocalCrawl` adapter, which BFSes using *this* orchestrator's
     ///   `fetch` per URL.
-    /// - [`CrawlEngine::Auto`] — picks `SpiderCloud` when `SPIDER_CLOUD_API_KEY`
+    /// - [`CrawlEngine::Auto`] — picks `SpiderCloud` when `SPIDER_API_KEY`
     ///   resolves on the embedded scrape request, otherwise falls back to `Local`.
     ///
     /// Returns [`FetchError::Config`] if the chosen route or adapter isn't
@@ -552,13 +552,13 @@ impl Orchestrator {
 
     /// Pick a concrete engine for a crawl request. `Auto` resolves via the
     /// embedded scrape request's credential map first, then process env —
-    /// `SpiderCloud` if `SPIDER_CLOUD_API_KEY` is set, else `Local`.
+    /// `SpiderCloud` if `SPIDER_API_KEY` is set, else `Local`.
     fn resolve_crawl_engine(&self, req: &CrawlRequest) -> CrawlEngine {
         match req.engine {
             CrawlEngine::SpiderCloud => CrawlEngine::SpiderCloud,
             CrawlEngine::Local => CrawlEngine::Local,
             CrawlEngine::Auto => {
-                if req.scrape.resolve_env("SPIDER_CLOUD_API_KEY").is_some() {
+                if req.scrape.resolve_env("SPIDER_API_KEY").is_some() {
                     CrawlEngine::SpiderCloud
                 } else {
                     CrawlEngine::Local

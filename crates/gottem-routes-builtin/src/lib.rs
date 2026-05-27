@@ -130,7 +130,7 @@ pub fn add_local(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchErr
 }
 
 /// Spider — JSONL streaming, Bearer auth. 4 routes spanning T4 (HTTP) → T7 (smart unblocker).
-/// Requires env var `SPIDER_CLOUD_API_KEY`.
+/// Requires env var `SPIDER_API_KEY`.
 #[cfg(feature = "spider-cloud")]
 pub fn add_spider_cloud(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
     b.add_toml(include_str!("../routes/spider_cloud.toml"))
@@ -186,7 +186,7 @@ pub fn add_browserless(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, Fe
 }
 
 /// Spider Browser Cloud — CDP, api_key in URL query. One route at T8.
-/// Requires env var `SPIDER_CLOUD_API_KEY`.
+/// Requires env var `SPIDER_API_KEY`.
 #[cfg(feature = "spider-browser")]
 pub fn add_spider_browser(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
     b.add_toml(include_str!("../routes/spider_browser.toml"))

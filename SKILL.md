@@ -81,7 +81,7 @@ Engines:
   uses `spider::page::Page::links` on bytes already fetched — no re-fetch for
   outlinks. Visited / depth / allow / deny / robots / budget all delegated to
   `spider::website::Website`.
-- `auto` — Spider if `SPIDER_CLOUD_API_KEY` is set, else local. Default.
+- `auto` — Spider if `SPIDER_API_KEY` is set, else local. Default.
 
 `--param k=v` repeatable; values land in the route body template as
 `{{param:k}}` (numbers and JSON literals parse correctly; everything else is a
@@ -144,7 +144,7 @@ gottem --config routes.toml fetch URL  # layer custom vendor routes on top of bu
 ## Vendor credentials
 
 Vendor routes read API keys from environment variables (e.g. `FIRECRAWL_API_KEY`,
-`ZENROWS_API_KEY`, `SPIDER_CLOUD_API_KEY`). Run `gottem routes validate` to see
+`ZENROWS_API_KEY`, `SPIDER_API_KEY`). Run `gottem routes validate` to see
 which routes are usable with the keys currently set — routes without their key
 are skipped, not errored.
 

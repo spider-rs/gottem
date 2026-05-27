@@ -48,7 +48,7 @@ gottem routes show spider.smart
 
 # Tell gottem which vendor keys you have.
 export FIRECRAWL_API_KEY=fc-...
-export SPIDER_CLOUD_API_KEY=sk-...
+export SPIDER_API_KEY=sk-...
 
 # Fetch a URL. gottem starts at the lowest-cost tier, escalates if the basic routes fail.
 gottem fetch https://example.com --show-meta
@@ -90,7 +90,7 @@ You can pin the tier band you want with `--tier-min` / `--tier-max`, or hard-cap
 
 | Vendor                    | Routes (count) | Env var                          |
 |---------------------------|---------------:|----------------------------------|
-| Spider              | 4              | `SPIDER_CLOUD_API_KEY`           |
+| Spider              | 4              | `SPIDER_API_KEY`           |
 | Firecrawl                 | 2              | `FIRECRAWL_API_KEY`              |
 | ZenRows                   | 3              | `ZENROWS_API_KEY`                |
 | ScrapingBee               | 3              | `SCRAPINGBEE_API_KEY`            |
@@ -98,7 +98,7 @@ You can pin the tier band you want with `--tier-min` / `--tier-max`, or hard-cap
 | Zyte API                  | 1              | `ZYTE_API_KEY`                   |
 | Brightdata Scraping Browser | 1            | `BRIGHTDATA_BROWSER`             |
 | Browserless               | 1              | `BROWSERLESS_TOKEN`              |
-| Spider Browser Cloud      | 1              | `SPIDER_CLOUD_API_KEY` (shared)  |
+| Spider Browser Cloud      | 1              | `SPIDER_API_KEY` (shared)  |
 | Apify                     | 1              | `APIFY_API_TOKEN`                |
 | Oxylabs Web Scraper       | 1              | `OXYLABS_USER` + `OXYLABS_PASS`  |
 | 2Captcha solver           | 1              | `2CAPTCHA_API_KEY` (¹)           |
@@ -163,7 +163,7 @@ Two engines, picked by `--engine`:
 
 | Engine | What it does |
 |---|---|
-| `spider-cloud` | POSTs to Spider's `/crawl` and streams the JSONL response back. Single round-trip per crawl, vendor handles fanout. Requires `SPIDER_CLOUD_API_KEY`. |
+| `spider-cloud` | POSTs to Spider's `/crawl` and streams the JSONL response back. Single round-trip per crawl, vendor handles fanout. Requires `SPIDER_API_KEY`. |
 | `local` | BFS owned by gottem: every URL goes through the *same scrape ladder* you'd use for a one-off `fetch`, so per-page escalation (T0 → T7) still works mid-crawl. Link discovery uses [`spider::page::Page::links`](https://docs.rs/spider) on bytes already returned — no re-fetch for outlink extraction. Visited / depth / allow / deny / robots / budget all delegated to `spider::website::Website`. |
 | `auto` | Spider if the key is set, else local. (Default.) |
 

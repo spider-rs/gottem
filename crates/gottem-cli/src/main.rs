@@ -168,7 +168,7 @@ enum Format {
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum CrawlEngineArg {
-    /// Pick Spider if `SPIDER_CLOUD_API_KEY` is set, else Local.
+    /// Pick Spider if `SPIDER_API_KEY` is set, else Local.
     Auto,
     /// Spider's `/crawl` endpoint (native JSONL streaming).
     SpiderCloud,

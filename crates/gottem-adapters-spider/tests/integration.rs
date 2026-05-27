@@ -452,8 +452,8 @@ async fn local_crawl_respects_limit() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn local_crawl_engine_falls_back_to_local_when_no_spider_cloud_key() {
-    // Auto engine + no SPIDER_CLOUD_API_KEY → Local
-    std::env::remove_var("SPIDER_CLOUD_API_KEY");
+    // Auto engine + no SPIDER_API_KEY → Local
+    std::env::remove_var("SPIDER_API_KEY");
     let (orch, server) = build_local_crawl_harness().await;
 
     let req = CrawlRequest::new(Url::parse(&server.uri()).unwrap())

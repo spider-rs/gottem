@@ -1,6 +1,6 @@
 [package]
 name = "gottem-adapters-browseruse"
-version = "0.1.13"
+version = "0.1.14"
 description = "gottem adapter for Browser Use Cloud — AI agent that runs a natural-language browser task. Submit + poll protocol exposed as a single Adapter call."
 readme = "README.md"
 edition.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core = { path = "../gottem-core", version = "0.1.13" }
+gottem-core = { path = "../gottem-core", version = "0.1.14" }
 reqwest     = { workspace = true, features = ["rustls", "gzip", "brotli", "http2"] }
 async-trait = { workspace = true }
 bytes       = { workspace = true }

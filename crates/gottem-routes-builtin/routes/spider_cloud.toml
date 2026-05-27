@@ -1,6 +1,6 @@
 # Spider routes — JSONL streaming, Bearer auth.
 #
-# Env var: SPIDER_CLOUD_API_KEY
+# Env var: SPIDER_API_KEY
 # Endpoint: https://api.spider.cloud/scrape
 # Docs:     https://spider.cloud/docs/api
 #
@@ -23,7 +23,7 @@ concurrency = 20
 
 [route.auth]
 kind = "bearer"
-env  = "SPIDER_CLOUD_API_KEY"
+env  = "SPIDER_API_KEY"
 
 [route.body]
 kind     = "json"
@@ -61,7 +61,7 @@ concurrency = 10
 
 [route.auth]
 kind = "bearer"
-env  = "SPIDER_CLOUD_API_KEY"
+env  = "SPIDER_API_KEY"
 
 [route.body]
 kind     = "json"
@@ -102,7 +102,7 @@ concurrency = 8
 
 [route.auth]
 kind = "bearer"
-env  = "SPIDER_CLOUD_API_KEY"
+env  = "SPIDER_API_KEY"
 
 [route.body]
 kind     = "json"
@@ -145,7 +145,7 @@ concurrency = 5
 
 [route.auth]
 kind = "bearer"
-env  = "SPIDER_CLOUD_API_KEY"
+env  = "SPIDER_API_KEY"
 
 [route.body]
 kind     = "json"
@@ -203,7 +203,7 @@ concurrency = 4
 
 [route.auth]
 kind = "bearer"
-env  = "SPIDER_CLOUD_API_KEY"
+env  = "SPIDER_API_KEY"
 
 [route.body]
 kind     = "json"

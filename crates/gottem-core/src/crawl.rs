@@ -16,7 +16,7 @@
 //!   [`Page::links`](spider::page::Page::links) extracting outlinks from
 //!   the bytes we already fetched (no re-fetch for discovery).
 //!
-//! [`CrawlEngine::Auto`] picks SpiderCloud when `SPIDER_CLOUD_API_KEY` is
+//! [`CrawlEngine::Auto`] picks SpiderCloud when `SPIDER_API_KEY` is
 //! resolvable for the request, else Local.
 
 use std::collections::HashMap;

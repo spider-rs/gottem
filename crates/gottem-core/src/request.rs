@@ -49,7 +49,7 @@ pub struct ScrapeRequest {
     /// Free-form per-request hints passed through to adapters (e.g. chrome args).
     pub extra: HashMap<String, serde_json::Value>,
     /// Per-request credential overrides keyed by env-var name (e.g.
-    /// `"SPIDER_CLOUD_API_KEY" → "sk-..."`). When an adapter resolves an
+    /// `"SPIDER_API_KEY" → "sk-..."`). When an adapter resolves an
     /// [`crate::AuthSpec`] env var or a `{{env:NAME}}` template, it consults
     /// this map first and only falls back to [`std::env::var`] if the name
     /// isn't present. This is how BYOK injects a user-supplied vendor key
