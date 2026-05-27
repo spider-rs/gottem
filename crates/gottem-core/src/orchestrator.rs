@@ -25,16 +25,16 @@ pub use spider::utils::hedge::{HedgeConfig, HedgeTracker};
 /// Orchestration mode passed to [`Orchestrator::fetch`].
 #[derive(Debug, Clone, Default)]
 pub enum Mode {
-    /// Sequential cheapest-first via the supplied [`RetryStrategy`].
+    /// Sequential lowest-cost first via the supplied [`RetryStrategy`].
     #[default]
     Cheap,
     /// Fire `max_parallel` routes at the same tier in parallel; first valid wins.
     Race { max_parallel: usize },
     /// Single route + adaptive hedge after `HedgeTracker::adaptive_delay`.
     Hedge,
-    /// Ladder: cheap mode, but launch a hedge at tier-N+1 after `hedge_delay`.
+    /// Ladder: sequential mode, but launch a hedge at tier-N+1 after `hedge_delay`.
     Ladder { hedge_delay: Duration },
-    /// Cheap mode capped by an inline budget ceiling.
+    /// Sequential mode capped by an inline budget ceiling.
     Budget { ceiling_milli: u64 },
 }
 
@@ -200,7 +200,7 @@ impl Orchestrator {
         })
     }
 
-    /// Cheap mode: sequential ladder. The strategy's `initial()` provides the first route;
+    /// Sequential mode: sequential ladder. The strategy's `initial()` provides the first route;
     /// subsequent retries escalate via `on_retry()` until success, exhaustion, or non-retryable error.
     ///
     /// **Promotion shortcut:** before consulting the strategy, the orchestrator checks
@@ -209,7 +209,7 @@ impl Orchestrator {
     /// is skipped and that proven route runs first. The strategy still handles retries
     /// on failure, so promotion is an *acceleration*, never a constraint.
     #[allow(unused_assignments)]
-    pub async fn fetch_cheap(
+    pub async fn fetch(
         &self,
         req: ScrapeRequest,
         strategy: Arc<dyn RetryStrategy>,
@@ -316,7 +316,7 @@ impl Orchestrator {
         cancel: CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
         if !hedge_config.enabled || hedge_config.max_hedges == 0 {
-            return self.fetch_cheap(req, strategy, cancel).await;
+            return self.fetch(req, strategy, cancel).await;
         }
 
         // Build the ladder of routes by walking the strategy. Cap by max_hedges + 1 (primary + N).
@@ -494,7 +494,7 @@ impl Orchestrator {
     ///   and dispatches via the registered crawl adapter for `HttpJsonlStreamMany`.
     /// - [`CrawlEngine::Local`] — looks up the `local.crawl` route and dispatches
     ///   via the `SpiderLocalCrawl` adapter, which BFSes using *this* orchestrator's
-    ///   `fetch_cheap` per URL.
+    ///   `fetch` per URL.
     /// - [`CrawlEngine::Auto`] — picks `SpiderCloud` when `SPIDER_CLOUD_API_KEY`
     ///   resolves on the embedded scrape request, otherwise falls back to `Local`.
     ///

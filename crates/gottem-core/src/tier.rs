@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// The escalation ladder. Lower tiers are cheaper and faster; higher tiers can
+/// The escalation ladder. Lower tiers are less expensive and faster; higher tiers can
 /// bypass increasingly aggressive anti-bot defenses at increasing cost.
 ///
 /// Built-in built-up convention (not enforced by core):

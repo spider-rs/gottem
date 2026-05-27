@@ -17,7 +17,7 @@ pub struct ScrapeResponse {
     ///
     /// Stored as [`Bytes`] (not `String`) so the utf8-passthrough cases — `Html`,
     /// `Markdown`, `RawText` — can share the **same allocation** as [`Self::body`]
-    /// via a refcount bump. Reading as `&str` is one cheap utf8 check on each call;
+    /// via a refcount bump. Reading as `&str` is one inexpensive utf8 check on each call;
     /// use [`Self::content_str`] / [`Self::content_str_lossy`] for that.
     pub content: Option<Bytes>,
     pub route_id: RouteId,

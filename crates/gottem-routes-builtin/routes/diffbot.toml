@@ -27,9 +27,9 @@ tier        = 5
 # The route's static cost is pegged at T5 norms (50 milli-cents) rather than the
 # raw $0.001 figure so the tier-monotonic-cost catalog invariant holds — within
 # T5 the ladder breaks ties by `priority`, so this stays a fallback under the
-# cheaper Spider/Firecrawl/ZenRows/ScrapingBee chrome routes.
+# less expensive Spider/Firecrawl/ZenRows/ScrapingBee chrome routes.
 cost        = 50
-priority    = 2                 # tiebreak below cheaper T5 chrome routes
+priority    = 2                 # tiebreak below less expensive T5 chrome routes
 timeout_ms  = 60000
 concurrency = 10
 

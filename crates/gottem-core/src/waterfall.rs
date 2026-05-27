@@ -1,4 +1,4 @@
-//! Waterfall success/failure stats — used by the orchestrator to skip the cheapest-first
+//! Waterfall success/failure stats — used by the orchestrator to skip the lowest-cost first
 //! warmup when a route has *proven* itself on a domain.
 //!
 //! ## Why
@@ -10,7 +10,7 @@
 //!
 //! ## What the qualifier scores on
 //!
-//! - **Cost** — cheaper is better (within the cohort of qualifying routes)
+//! - **Cost** — lower cost is better (within the cohort of qualifying routes)
 //! - **Speed** — lower EMA latency is better
 //! - **Reliability** — higher success rate is better
 //! - **Confidence** — more samples is better (log-scaled so 10× more data isn't 10× weight)
@@ -73,7 +73,7 @@ fn now_ms() -> u64 {
 /// sum to 1.0 but doing so keeps the final score in [0.0, 1.0] for easy reasoning.
 #[derive(Debug, Clone)]
 pub struct ScoreWeights {
-    /// How much cost matters. Cheaper route → higher score component.
+    /// How much cost matters. Lower cost → higher score component.
     pub cost: f64,
     /// How much latency matters. Faster route → higher score component.
     pub speed: f64,
@@ -536,14 +536,14 @@ mod tests {
 
     fn cat_two() -> RouteCatalog {
         RouteCatalogBuilder::new()
-            .add(route("cheap", 10))
+            .add(route("basic", 10))
             .add(route("expensive", 100))
             .build()
     }
 
     fn cat_three() -> RouteCatalog {
         RouteCatalogBuilder::new()
-            .add(route("cheap_slow", 10))
+            .add(route("basic_slow", 10))
             .add(route("mid_fast", 50))
             .add(route("expensive_proven", 100))
             .build()
@@ -591,18 +591,18 @@ mod tests {
     }
 
     #[test]
-    fn scorer_picks_cheapest_when_speed_and_reliability_equal() {
+    fn scorer_picks_lowest_cost_when_speed_and_reliability_equal() {
         let stats = WaterfallStats::new(permissive());
         let cat = cat_two();
         let url = Url::parse("https://both-work.test/").unwrap();
-        let cheap: RouteId = Arc::from("cheap");
+        let basic: RouteId = Arc::from("basic");
         let exp: RouteId = Arc::from("expensive");
         for _ in 0..10 {
-            stats.record_success(&cheap, &url, 500);
+            stats.record_success(&basic, &url, 500);
             stats.record_success(&exp, &url, 500);
         }
         let promoted = stats.promoted_route(&url, &cat).expect("promote");
-        assert_eq!(promoted.id.as_ref(), "cheap");
+        assert_eq!(promoted.id.as_ref(), "basic");
     }
 
     #[test]

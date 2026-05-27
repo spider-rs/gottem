@@ -345,8 +345,8 @@ fn chrome_routes_load_at_t8_with_ws_endpoints() {
 
 #[test]
 fn tiers_are_ordered_within_catalog() {
-    // Sanity: across the catalog, every route at tier N is cheaper-or-equal-cost
-    // to every route at tier N+1. This is the cheapest-first ordering guarantee
+    // Sanity: across the catalog, every route at tier N is less expensive-or-equal-cost
+    // to every route at tier N+1. This is the lowest-cost first ordering guarantee
     // for the LadderStrategy.
     let catalog = gottem_routes_builtin::register_all(RouteCatalogBuilder::new())
         .expect("load")

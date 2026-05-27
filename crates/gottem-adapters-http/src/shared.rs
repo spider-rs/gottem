@@ -409,7 +409,7 @@ mod tests {
     }
 
     /// Run just the content side of [`extract_content_and_cost`] (no cost spec),
-    /// returning the extracted content as a `String` for cheap equality assertions.
+    /// returning the extracted content as a `String` for inexpensive equality assertions.
     fn parse_only(parse: &ResponseParse, body: &[u8]) -> Result<Option<String>, FetchError> {
         let body = Bytes::copy_from_slice(body);
         extract_content_and_cost(parse, None, &[], &body)

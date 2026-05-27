@@ -19,7 +19,7 @@
 # Per the catalog tiering convention this sits at T7 ("smart" / advanced
 # API), but SERP is conceptually a different category from URL scraping —
 # callers invoke this via `force_provider` with `body.url` carrying the
-# search keyword, NOT through the cheapest-first ladder.
+# search keyword, NOT through the lowest-cost first ladder.
 #
 # Extend with sibling routes (Bing SERP, Keyword Data, Backlinks, On-Page,
 # etc.) as needs arise; one TOML entry per endpoint, same auth pair.

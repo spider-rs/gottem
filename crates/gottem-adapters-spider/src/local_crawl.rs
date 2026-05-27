@@ -18,7 +18,7 @@
 //!   [`PageEntry`] to the output channel, pushes discovered links back
 //!   into the frontier. Single owner = no mutex.
 //! - **Worker tasks** — stateless. Receive a `(url, depth, …)` tuple, run
-//!   `Orchestrator::fetch_cheap`, build a synthetic [`Page`](spider::page::Page)
+//!   `Orchestrator::fetch`, build a synthetic [`Page`](spider::page::Page)
 //!   from the returned bytes, run [`Page::links`](spider::page::Page::links)
 //!   to extract outlinks, and ship the [`WorkerReport`] back to the
 //!   dispatcher. Each worker owns its own [`Page`] — no shared state.
@@ -107,8 +107,8 @@ pub struct SpiderLocalCrawlAdapter {
 
 impl SpiderLocalCrawlAdapter {
     /// Build with an explicit retry strategy. Pass the same one you use
-    /// for `fetch_cheap` on the orchestrator — each child URL inside the
-    /// crawl runs through `fetch_cheap` with this strategy.
+    /// for `fetch` on the orchestrator — each child URL inside the
+    /// crawl runs through `fetch` with this strategy.
     ///
     /// Returns an error if the internal `spider::Client` (used only for
     /// the robots.txt fetch when `respect_robots=true`) fails to build.
@@ -352,7 +352,7 @@ impl CrawlAdapter for SpiderLocalCrawlAdapter {
                             let mut child = scrape_template;
                             child.url = url.clone();
                             let fetch_result =
-                                orch.fetch_cheap(child, strategy, cancel.clone()).await;
+                                orch.fetch(child, strategy, cancel.clone()).await;
                             let result = match fetch_result {
                                 Ok(scrape) => {
                                     let new_links = extract_links_locally(

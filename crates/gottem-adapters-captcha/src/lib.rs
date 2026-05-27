@@ -16,7 +16,7 @@
 //! [`RetryStrategy`] or in straight-line glue code. The pattern is:
 //!
 //! ```ignore
-//! // 1. Try the cheap route.
+//! // 1. Try the low-tier route.
 //! let first = orch.execute_once(&route, &req, 0, &cancel).await;
 //!
 //! // 2. If it returned a CAPTCHA challenge, solve it.

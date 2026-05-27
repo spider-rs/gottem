@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 /// Lightweight cancellation token: cancellable from any task, observable via [`Self::cancelled`].
 ///
 /// Designed for race winners to abort losers and for outer callers to abort the whole
-/// orchestrator. Backed by a single [`AtomicBool`] and a [`Notify`]; cloning is cheap and
+/// orchestrator. Backed by a single [`AtomicBool`] and a [`Notify`]; cloning is inexpensive and
 /// shares cancellation state.
 #[derive(Clone, Debug, Default)]
 pub struct CancelToken {

@@ -1,7 +1,7 @@
 //! gottem CLI — universal scraper that reliably gets the data.
 //!
 //! Subcommands:
-//!   gottem fetch <url>            — cheapest-first ladder (default), escalates on failure
+//!   gottem fetch <url>            — lowest-cost first ladder (default), escalates on failure
 //!   gottem probe <url>            — sequential tier walk, report which tier yields content
 //!   gottem routes list            — tabular catalog dump
 //!   gottem routes validate        — verify env vars for every route's auth
@@ -45,7 +45,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Fetch a URL using the cheapest-first ladder (or race mode).
+    /// Fetch a URL using the lowest-cost first ladder (or race mode).
     Fetch(FetchArgs),
     /// Try each tier in order and report which one returns valid content (mirror of spider-cli's probe_tiers.py).
     Probe(ProbeArgs),
@@ -75,7 +75,7 @@ struct FetchArgs {
     /// URL to scrape.
     url: String,
 
-    /// Mode: ladder = cheapest-first sequential, race = parallel across selected routes.
+    /// Mode: ladder = lowest-cost first sequential, race = parallel across selected routes.
     #[arg(long, value_enum, default_value_t = Mode::Ladder)]
     mode: Mode,
 
@@ -384,7 +384,7 @@ async fn run_fetch(args: FetchArgs, config_path: Option<&std::path::Path>) -> Re
                 req.required_caps,
                 args.max_retries,
             ));
-            orch.fetch_cheap(req, strategy, cancel).await?
+            orch.fetch(req, strategy, cancel).await?
         }
         Mode::Race => {
             let ids: Vec<String> = if !args.routes.is_empty() {

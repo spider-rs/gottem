@@ -4,7 +4,7 @@ The `gottem` command-line binary: a universal scraper that reliably gets the dat
 
 ## What it does
 
-`gottem` talks to every major scraping vendor — and your local browser — through a single tiered ladder. You give it a URL; it tries the cheapest route first, escalates when blocked, races vendors when speed matters, and stops when it gets clean content. Powered by [`spider`](https://github.com/spider-rs/spider).
+`gottem` talks to every major scraping vendor — and your local browser — through a single tiered ladder. You give it a URL; it tries the lowest-cost route first, escalates when blocked, races vendors when speed matters, and stops when it gets clean content. Powered by [`spider`](https://github.com/spider-rs/spider).
 
 This crate is the CLI front end for the [gottem](https://github.com/spider-rs/gottem) library workspace.
 
@@ -19,7 +19,7 @@ This installs the `gottem` binary on your PATH.
 ## Subcommands
 
 ```
-gottem fetch <url>        cheapest-first ladder (default), escalates on failure
+gottem fetch <url>        lowest-cost first ladder (default), escalates on failure
 gottem probe <url>        sequential tier walk, report which tier yields content
 gottem routes list        tabular catalog dump
 gottem routes show <id>   full detail for one route
@@ -40,7 +40,7 @@ gottem fetch https://example.com --show-meta
 # Race routes in parallel — fastest valid response wins.
 gottem fetch https://example.com --mode race --routes firecrawl.scrape,spider.cloud.http,zenrows.basic
 
-# Hedge: start cheap, fire a staggered backup after a delay.
+# Hedge: start low-tier, fire a staggered backup after a delay.
 gottem fetch https://example.com --mode hedge --hedge-delay-ms 2000
 
 # Cap cost and pin the tier band.

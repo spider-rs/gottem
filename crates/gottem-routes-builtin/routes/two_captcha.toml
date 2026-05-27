@@ -13,7 +13,7 @@
 # Unlike a content-fetching route, this returns a captcha TOKEN as `content`, not
 # the page HTML. Compose with another route to actually scrape:
 #
-#   1. Try cheap route → response is a CAPTCHA challenge
+#   1. Try the lowest-cost route → response is a CAPTCHA challenge
 #   2. Extract siteKey from the page
 #   3. fetch_once(captcha.2captcha, req_with_extras { siteKey, captchaType })
 #   4. Replay original URL with the returned token embedded

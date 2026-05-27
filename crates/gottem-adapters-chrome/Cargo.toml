@@ -1,6 +1,6 @@
 [package]
 name = "gottem-adapters-chrome"
-version = "0.1.10"
+version = "0.1.11"
 description = "gottem CDP adapter: connects to Chrome via WebSocket (Brightdata Scraping Browser, Browserless, Spider Browser Cloud, local Chrome)."
 readme = "README.md"
 edition.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core  = { path = "../gottem-core", version = "0.1.10" }
+gottem-core  = { path = "../gottem-core", version = "0.1.11" }
 # CDP driver. `chromey` is the chromiumoxide fork the spider stack standardized
 # on — we depend on it directly here (rather than reaching through
 # `spider::chromiumoxide`) so this adapter stays decoupled from spider's

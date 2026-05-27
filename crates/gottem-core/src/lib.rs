@@ -13,7 +13,7 @@
 //!   [`SpiderLocal`](AdapterKind::SpiderLocal),
 //!   [`Custom`](AdapterKind::Custom)).
 //! - [`RouteCatalog`] is a frozen registry of routes loadable from TOML.
-//! - [`Orchestrator`] drives requests against the catalog with cheap/race/hedge modes.
+//! - [`Orchestrator`] drives requests against the catalog with sequential/race/hedge modes.
 //! - [`RetryDirective`] additively wraps [`spider::retry_strategy::RetryDirective`] with
 //!   `route: Option<Arc<Route>>`. Existing spider
 //!   [`RetryStrategy`](spider::retry_strategy::RetryStrategy) impls plug in unchanged

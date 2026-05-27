@@ -8,7 +8,7 @@ Universal scraper foundation: route catalog, the `Adapter` trait, and a tiered/r
 
 - **`Route`** — a vendor endpoint described as *data* (loaded from TOML, no per-vendor code path). Routes carry a tier, cost, auth spec, body template, and parse + validate rules.
 - **`Adapter`** — a small finite set of protocols (`DirectHttp`, `HttpJson`, `HttpJsonlStream`, `ChromeCdp`, `SpiderLocal`, `Custom`). Adapters are code; routes are config. Adding a vendor is a TOML row, not a release.
-- **`Orchestrator`** — drives requests against a `RouteCatalog` with three modes: cheapest-first **ladder** (escalate on failure), **race** (parallel, first valid wins), and **hedge** (staggered backups).
+- **`Orchestrator`** — drives requests against a `RouteCatalog` with three modes: lowest-cost first **ladder** (escalate on failure), **race** (parallel, first valid wins), and **hedge** (staggered backups).
 
 It also re-exports spider's `RetryStrategy` trait family, `HedgeTracker`, `AntiBotTech`, and `RequestProxy`, and adds `WaterfallStats` — learned per-`(route, domain)` ordering that skips the ladder warmup once a route has proven itself.
 
@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         catalog.clone(), Tier::T0, Tier::T9, Capabilities::default(), 5,
     ));
 
-    let resp = orch.fetch_cheap(
+    let resp = orch.fetch(
         ScrapeRequest::get(Url::parse("https://example.com")?),
         strategy,
         CancelToken::new(),

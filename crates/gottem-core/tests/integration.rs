@@ -148,7 +148,7 @@ fn build(budget: u64) -> Harness {
     let catalog = Arc::new(
         RouteCatalogBuilder::new()
             .add(route("local.http", Tier::T0, 0))
-            .add(route("cloud.cheap", Tier::T4, 10))
+            .add(route("cloud.basic", Tier::T4, 10))
             .add(route("cloud.smart", Tier::T7, 100))
             .build(),
     );
@@ -185,7 +185,7 @@ async fn ladder_succeeds_at_lowest_tier() {
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
     let resp = h
         .orch
-        .fetch_cheap(req, strategy, CancelToken::new())
+        .fetch(req, strategy, CancelToken::new())
         .await
         .expect("expected success");
     assert_eq!(resp.tier, Tier::T0);
@@ -201,7 +201,7 @@ async fn ladder_escalates_on_validation_failure() {
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
     let resp = h
         .orch
-        .fetch_cheap(req, strategy, CancelToken::new())
+        .fetch(req, strategy, CancelToken::new())
         .await
         .unwrap();
     assert_eq!(resp.tier, Tier::T4);
@@ -212,12 +212,12 @@ async fn ladder_escalates_on_validation_failure() {
 async fn ladder_escalates_on_5xx_status() {
     let h = build(10_000);
     h.mock.set("local.http", 503, b"upstream down");
-    h.mock.set("cloud.cheap", 503, b"upstream down");
+    h.mock.set("cloud.basic", 503, b"upstream down");
     let strategy = ladder(h.catalog.clone(), 5);
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
     let resp = h
         .orch
-        .fetch_cheap(req, strategy, CancelToken::new())
+        .fetch(req, strategy, CancelToken::new())
         .await
         .unwrap();
     assert_eq!(resp.tier, Tier::T7);
@@ -227,12 +227,12 @@ async fn ladder_escalates_on_5xx_status() {
 async fn budget_ceiling_blocks_escalation() {
     let h = build(50); // Allows T0 ($0) and T4 ($0.001 = 10 mc) but not T7 ($0.01 = 100 mc).
     h.mock.set("local.http", 200, b"tiny");
-    h.mock.set("cloud.cheap", 200, b"tiny");
+    h.mock.set("cloud.basic", 200, b"tiny");
     let strategy = ladder(h.catalog.clone(), 5);
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
     let err = h
         .orch
-        .fetch_cheap(req, strategy, CancelToken::new())
+        .fetch(req, strategy, CancelToken::new())
         .await
         .unwrap_err();
     assert!(
@@ -251,7 +251,7 @@ async fn race_winner_cancels_losers() {
         .orch
         .fetch_race(
             req,
-            &["local.http", "cloud.cheap", "cloud.smart"],
+            &["local.http", "cloud.basic", "cloud.smart"],
             CancelToken::new(),
         )
         .await
@@ -261,17 +261,17 @@ async fn race_winner_cancels_losers() {
     assert!(elapsed.as_millis() < 200, "race took too long: {elapsed:?}");
     assert!(matches!(
         resp.route_id.as_ref(),
-        "local.http" | "cloud.cheap" | "cloud.smart"
+        "local.http" | "cloud.basic" | "cloud.smart"
     ));
 }
 
 #[tokio::test]
 async fn waterfall_promotes_proven_route_skipping_ladder_warmup() {
-    // Build an orchestrator with a low-threshold WaterfallConfig so we can prime it cheaply.
+    // Build an orchestrator with a low-threshold WaterfallConfig so we can prime it inexpensively.
     let catalog = Arc::new(
         RouteCatalogBuilder::new()
             .add(route("local.http", Tier::T0, 0))
-            .add(route("cloud.cheap", Tier::T4, 10))
+            .add(route("cloud.basic", Tier::T4, 10))
             .add(route("cloud.smart", Tier::T7, 100))
             .build(),
     );
@@ -305,7 +305,7 @@ async fn waterfall_promotes_proven_route_skipping_ladder_warmup() {
     let strategy = ladder(catalog.clone(), 3);
     let req = ScrapeRequest::get(proven_url);
     let resp = orch
-        .fetch_cheap(req, strategy, CancelToken::new())
+        .fetch(req, strategy, CancelToken::new())
         .await
         .expect("promoted fetch ok");
     assert_eq!(
@@ -336,7 +336,7 @@ async fn waterfall_no_promotion_when_unproven_falls_back_to_ladder() {
     let strategy = ladder(catalog.clone(), 3);
     let req = ScrapeRequest::get(Url::parse("https://fresh.test/").unwrap());
     let resp = orch
-        .fetch_cheap(req, strategy, CancelToken::new())
+        .fetch(req, strategy, CancelToken::new())
         .await
         .expect("cold-start fetch ok");
     assert_eq!(resp.tier, Tier::T0);
@@ -346,7 +346,7 @@ async fn waterfall_no_promotion_when_unproven_falls_back_to_ladder() {
 async fn hedge_primary_wins_when_fast() {
     let h = build(10_000);
     // No delay on primary T0, slow delay on hedge T4. Primary should return first.
-    h.mock.set_delay("cloud.cheap", 200);
+    h.mock.set_delay("cloud.basic", 200);
     let strategy = ladder(h.catalog.clone(), 5);
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
     let hedge_cfg = HedgeConfig {
@@ -400,14 +400,14 @@ async fn hedge_backup_wins_when_primary_slow() {
 }
 
 #[tokio::test]
-async fn hedge_disabled_falls_back_to_cheap() {
+async fn hedge_disabled_falls_back_to_sequential() {
     let h = build(10_000);
     let strategy = ladder(h.catalog.clone(), 5);
     let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
     let hedge_cfg = HedgeConfig {
         delay: std::time::Duration::from_millis(10),
         max_hedges: 1,
-        enabled: false, // disabled — should run fetch_cheap path
+        enabled: false, // disabled — should run fetch path
     };
     let resp = h
         .orch

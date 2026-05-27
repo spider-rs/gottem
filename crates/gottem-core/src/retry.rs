@@ -59,7 +59,7 @@ pub trait RetryStrategy: Send + Sync + 'static {
 
     /// Initial route before any attempt has been made. Default is `None` — the orchestrator
     /// then expects the caller to supply a starting route. [`LadderStrategy`] returns the
-    /// cheapest route at `tier_min` from its catalog.
+    /// lowest-cost route at `tier_min` from its catalog.
     fn initial(&self) -> Option<Arc<Route>> {
         None
     }
@@ -104,8 +104,8 @@ impl<S: spider::retry_strategy::RetryStrategy> RetryStrategy for SpiderStrategyA
     }
 }
 
-/// Built-in cheap-to-expensive ladder strategy. On each retry, walks one tier higher in
-/// the catalog and picks the cheapest route at that tier whose [`Capabilities`] satisfy
+/// Built-in low-to-high cost ladder strategy. On each retry, walks one tier higher in
+/// the catalog and picks the lowest-cost route at that tier whose [`Capabilities`] satisfy
 /// `required_caps`.
 pub struct LadderStrategy {
     catalog: Arc<RouteCatalog>,
@@ -141,7 +141,7 @@ impl LadderStrategy {
             };
             for route in self.catalog.at_tier(tier) {
                 // Crawl-kind routes (HttpJsonlStreamMany, SpiderLocalCrawl) are
-                // for `Orchestrator::crawl`, never for single-URL `fetch_cheap`.
+                // for `Orchestrator::crawl`, never for single-URL `fetch`.
                 // Skip them in the scrape ladder so a local crawl's per-URL
                 // sub-fetch doesn't try to dispatch through a stream adapter.
                 if route.adapter.is_crawl() {
