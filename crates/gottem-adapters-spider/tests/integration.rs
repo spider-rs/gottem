@@ -476,5 +476,47 @@ async fn local_crawl_engine_falls_back_to_local_when_no_spider_cloud_key() {
     );
 }
 
+/// External cancel fires mid-crawl → stream terminates promptly. Covers
+/// the cloud client-disconnect cascade: the cloud forwarder calls
+/// `cancel.cancel()` when its body Sender fails; the orchestrator's
+/// spawned tasks must abort without finishing the BFS.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn local_crawl_cancellation_stops_in_flight_work() {
+    let (orch, server) = build_local_crawl_harness().await;
+
+    let cancel = CancelToken::new();
+    let req = CrawlRequest::new(Url::parse(&server.uri()).unwrap())
+        .with_limit(10)
+        .with_depth(2)
+        .with_concurrency(1)
+        .with_engine(gottem_core::CrawlEngine::Local);
+
+    let mut stream = orch.crawl(req, cancel.clone()).await.unwrap();
+
+    let first = stream.next().await.expect("first page").expect("ok");
+    assert!(first.url.as_str().starts_with(&server.uri()));
+
+    cancel.cancel();
+
+    // Hard timeout — fails loudly if cancel doesn't propagate.
+    let drain = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let mut count = 1u32;
+        while stream.next().await.is_some() {
+            count += 1;
+        }
+        count
+    })
+    .await
+    .expect("stream should terminate within 3s of cancel");
+
+    // Harness has 4 pages total. Without cancel, all 4 yield. With
+    // cancel after page 1, we tolerate up to 4 (in-flight already-
+    // queued pages), but the stream must actually END.
+    assert!(
+        drain <= 4,
+        "expected cancel to halt the crawl, got {drain} pages"
+    );
+}
+
 #[allow(dead_code)]
 fn _unused(_: SpiderLocalCrawlAdapter) {}

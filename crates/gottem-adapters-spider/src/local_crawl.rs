@@ -349,11 +349,30 @@ impl CrawlAdapter for SpiderLocalCrawlAdapter {
                         // via the orchestrator's CancelToken wiring.
                         tokio::spawn(async move {
                             let _permit = permit;
+                            // Fast-path bail: if cancel already fired before
+                            // we even started, skip the fetch entirely. The
+                            // dispatcher tracks pending — even when the
+                            // crawl is winding down, a WorkerReport must
+                            // arrive so pending decrements; we send a
+                            // synthetic Cancelled report.
+                            if cancel.is_cancelled() {
+                                let _ = result_tx.send(WorkerReport {
+                                    depth,
+                                    result: Err(FetchError::Cancelled),
+                                    dispatch_started,
+                                });
+                                return;
+                            }
                             let mut child = scrape_template;
                             child.url = url.clone();
                             let fetch_result =
                                 orch.fetch(child, strategy, cancel.clone()).await;
+                            // Skip the CPU-bound link extraction when
+                            // cancel fired during the fetch — extracting
+                            // outlinks on a page the consumer will never
+                            // see is wasted work.
                             let result = match fetch_result {
+                                Ok(_) if cancel.is_cancelled() => Err(FetchError::Cancelled),
                                 Ok(scrape) => {
                                     let new_links = extract_links_locally(
                                         &url,
@@ -401,7 +420,13 @@ impl CrawlAdapter for SpiderLocalCrawlAdapter {
                                     elapsed: report.dispatch_started.elapsed(),
                                 };
                                 if output_tx.send(Ok(entry)).await.is_err() {
-                                    // Consumer disconnected — wind down.
+                                    // Consumer disconnected. Fire cancel so
+                                    // in-flight worker fetches abort
+                                    // immediately via the CancelToken
+                                    // arm in `orch.fetch` — otherwise
+                                    // they'd run to completion before
+                                    // noticing the dropped frontier_tx.
+                                    cancel.cancel();
                                     break;
                                 }
                                 for link in success.new_links {
@@ -412,6 +437,7 @@ impl CrawlAdapter for SpiderLocalCrawlAdapter {
                             }
                             Err(e) => {
                                 if output_tx.send(Err(e)).await.is_err() {
+                                    cancel.cancel();
                                     break;
                                 }
                             }
