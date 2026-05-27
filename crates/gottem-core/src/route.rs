@@ -177,7 +177,7 @@ pub enum AdapterKind {
     /// POST JSON body, parse chunked JSONL stream. Spider requires this — `.json()` will hang.
     HttpJsonlStream,
     /// POST JSON body, parse chunked JSONL stream, emit **one [`PageEntry`] per line**.
-    /// Used by `spider.cloud.crawl` — the only vendor in gottem that natively streams
+    /// Used by `spider.crawl` — the only vendor in gottem that natively streams
     /// many pages from one request. Other vendors stay single-page in the scrape catalog.
     ///
     /// [`PageEntry`]: crate::PageEntry
@@ -291,7 +291,7 @@ pub enum ResponseParse {
     JsonlFirst { path: String },
     /// Every non-empty JSONL line as a separate record. Path is the dotted field
     /// inside each record to use as `PageEntry::content` (use `$` to keep the
-    /// whole record as content). Used by `spider.cloud.crawl`'s multi-page stream.
+    /// whole record as content). Used by `spider.crawl`'s multi-page stream.
     JsonlEach { path: String },
     /// Body is already markdown — pass through.
     Markdown,

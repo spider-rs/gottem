@@ -31,14 +31,14 @@ gottem routes validate    verify env vars for every route's auth
 ```bash
 # Inspect what's available — no API keys needed.
 gottem routes list
-gottem routes show spider.cloud.smart
+gottem routes show spider.smart
 
 # Tell gottem which vendor keys you have, then fetch.
 export FIRECRAWL_API_KEY=fc-...
 gottem fetch https://example.com --show-meta
 
 # Race routes in parallel — fastest valid response wins.
-gottem fetch https://example.com --mode race --routes firecrawl.scrape,spider.cloud.http,zenrows.basic
+gottem fetch https://example.com --mode race --routes firecrawl.scrape,spider.http,zenrows.basic
 
 # Hedge: start low-tier, fire a staggered backup after a delay.
 gottem fetch https://example.com --mode hedge --hedge-delay-ms 2000

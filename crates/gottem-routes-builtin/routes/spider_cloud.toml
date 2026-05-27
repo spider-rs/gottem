@@ -11,7 +11,7 @@
 # T4 — HTTP request mode. Cheapest, no JS render, datacenter IPs.
 # ----------------------------------------------------------------------------
 [[route]]
-id          = "spider.cloud.http"
+id          = "spider.http"
 adapter     = "http_jsonl_stream"
 endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
@@ -49,7 +49,7 @@ n    = 500
 # T5 — Chrome rendering, datacenter IPs.
 # ----------------------------------------------------------------------------
 [[route]]
-id          = "spider.cloud.chrome"
+id          = "spider.chrome"
 adapter     = "http_jsonl_stream"
 endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
@@ -90,7 +90,7 @@ js = true
 # T6 — Chrome + residential proxy.
 # ----------------------------------------------------------------------------
 [[route]]
-id          = "spider.cloud.chrome.residential"
+id          = "spider.chrome.residential"
 adapter     = "http_jsonl_stream"
 endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
@@ -133,7 +133,7 @@ residential = true
 # Production-recommended (per spider/CLAUDE.md SpiderCloudMode docs).
 # ----------------------------------------------------------------------------
 [[route]]
-id          = "spider.cloud.smart"
+id          = "spider.smart"
 adapter     = "http_jsonl_stream"
 endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
@@ -191,7 +191,7 @@ stealth     = true
 # Defaults match CrawlRequest::new (limit=10, depth=2).
 # ----------------------------------------------------------------------------
 [[route]]
-id          = "spider.cloud.crawl"
+id          = "spider.crawl"
 adapter     = "http_jsonl_stream_many"
 endpoint    = "https://api.spider.cloud/crawl"
 method      = "POST"

@@ -16,7 +16,7 @@
 
 # ----------------------------------------------------------------------------
 # T4 — Standard Crawling API. Datacenter IPs, no JS render.
-# Cheaper than spider.cloud.http at scale; ladder picks spider first by priority.
+# Cheaper than spider.http at scale; ladder picks spider first by priority.
 # ----------------------------------------------------------------------------
 [[route]]
 id          = "crawlbase.standard"
@@ -25,7 +25,7 @@ endpoint    = "https://api.crawlbase.com/?token={{env:CRAWLBASE_TOKEN}}&url={{ur
 method      = "GET"
 tier        = 4
 cost        = 30                # ~$0.003/req at low volume; scales toward $0.0006/req
-priority    = 1                 # tiebreak after spider.cloud.http within T4
+priority    = 1                 # tiebreak after spider.http within T4
 timeout_ms  = 30000
 concurrency = 20
 

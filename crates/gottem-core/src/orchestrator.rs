@@ -490,7 +490,7 @@ impl Orchestrator {
     ///
     /// Dispatch:
     ///
-    /// - [`CrawlEngine::SpiderCloud`] — looks up the `spider.cloud.crawl` route
+    /// - [`CrawlEngine::SpiderCloud`] — looks up the `spider.crawl` route
     ///   and dispatches via the registered crawl adapter for `HttpJsonlStreamMany`.
     /// - [`CrawlEngine::Local`] — looks up the `local.crawl` route and dispatches
     ///   via the `SpiderLocalCrawl` adapter, which BFSes using *this* orchestrator's
@@ -508,7 +508,7 @@ impl Orchestrator {
     ) -> Result<PageEntryStream, FetchError> {
         let engine = self.resolve_crawl_engine(&req);
         let route_id: &str = match engine {
-            CrawlEngine::SpiderCloud => "spider.cloud.crawl",
+            CrawlEngine::SpiderCloud => "spider.crawl",
             CrawlEngine::Local => "local.crawl",
             CrawlEngine::Auto => unreachable!("resolve_crawl_engine never returns Auto"),
         };

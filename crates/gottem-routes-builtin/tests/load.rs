@@ -9,13 +9,13 @@ fn spider_cloud_loads_5_routes_tiers_4_through_7() {
     let catalog = gottem_routes_builtin::add_spider_cloud(RouteCatalogBuilder::new())
         .expect("spider_cloud.toml parses")
         .build();
-    // 4 scrape routes + 1 crawl route (spider.cloud.crawl).
+    // 4 scrape routes + 1 crawl route (spider.crawl).
     assert_eq!(catalog.len(), 5);
     for id in [
-        "spider.cloud.http",
-        "spider.cloud.chrome",
-        "spider.cloud.chrome.residential",
-        "spider.cloud.smart",
+        "spider.http",
+        "spider.chrome",
+        "spider.chrome.residential",
+        "spider.smart",
     ] {
         let route = catalog
             .get(id)
@@ -26,17 +26,17 @@ fn spider_cloud_loads_5_routes_tiers_4_through_7() {
             "{id} should use jsonl stream"
         );
     }
-    assert_eq!(catalog.get("spider.cloud.http").unwrap().tier, Tier::T4);
-    assert_eq!(catalog.get("spider.cloud.smart").unwrap().tier, Tier::T7);
+    assert_eq!(catalog.get("spider.http").unwrap().tier, Tier::T4);
+    assert_eq!(catalog.get("spider.smart").unwrap().tier, Tier::T7);
     // T7 smart should declare residential + stealth caps.
-    let smart = catalog.get("spider.cloud.smart").unwrap();
+    let smart = catalog.get("spider.smart").unwrap();
     assert!(smart.caps.js);
     assert!(smart.caps.residential);
     assert!(smart.caps.stealth);
     // Crawl route is a separate adapter family.
     let crawl = catalog
-        .get("spider.cloud.crawl")
-        .expect("spider.cloud.crawl route loaded");
+        .get("spider.crawl")
+        .expect("spider.crawl route loaded");
     assert_eq!(crawl.adapter, AdapterKind::HttpJsonlStreamMany);
     assert_eq!(crawl.tier, Tier::T4);
 }
@@ -135,7 +135,7 @@ fn register_all_succeeds_with_default_features() {
     // local.crawl is always present.
     let mut expected = 1usize;
     if cfg!(feature = "spider-cloud") {
-        // 4 scrape routes + 1 crawl route (spider.cloud.crawl).
+        // 4 scrape routes + 1 crawl route (spider.crawl).
         expected += 5;
     }
     if cfg!(feature = "firecrawl") {
@@ -332,7 +332,7 @@ fn chrome_routes_load_at_t8_with_ws_endpoints() {
         .as_str()
         .contains("{{env:BROWSERLESS_TOKEN}}"));
 
-    let sbc = catalog.get("spider.browser_cloud").unwrap();
+    let sbc = catalog.get("spider.browser").unwrap();
     assert!(sbc
         .endpoint
         .as_str()

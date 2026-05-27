@@ -55,7 +55,7 @@ pub struct PageEntry {
     /// Outlinks extracted from this page. Populated for `Local` (always)
     /// and `SpiderCloud` when the vendor returns links — `None` otherwise.
     pub links: Option<Vec<Url>>,
-    /// Which route fetched this page (e.g. `spider.cloud.crawl`,
+    /// Which route fetched this page (e.g. `spider.crawl`,
     /// `firecrawl.scrape`, `local.crawl`).
     pub route_id: RouteId,
     pub tier: Tier,
@@ -80,7 +80,7 @@ pub struct CrawlStats {
 }
 
 /// Which engine to use for a crawl. The catalog is consulted at dispatch
-/// time — `SpiderCloud` requires the `spider.cloud.crawl` route to be
+/// time — `SpiderCloud` requires the `spider.crawl` route to be
 /// loaded and authenticatable.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -89,7 +89,7 @@ pub enum CrawlEngine {
     /// request, else fall back to `Local`.
     #[default]
     Auto,
-    /// Use the `spider.cloud.crawl` route — JSONL streaming over Spider
+    /// Use the `spider.crawl` route — JSONL streaming over Spider
     /// Cloud's native crawl endpoint.
     SpiderCloud,
     /// Local BFS using the gottem scrape ladder + spider's link

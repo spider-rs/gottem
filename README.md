@@ -44,7 +44,7 @@ cargo install --path crates/gottem-cli
 ```bash
 # Inspect what's available — no API keys needed yet.
 gottem routes list
-gottem routes show spider.cloud.smart
+gottem routes show spider.smart
 
 # Tell gottem which vendor keys you have.
 export FIRECRAWL_API_KEY=fc-...
@@ -54,7 +54,7 @@ export SPIDER_CLOUD_API_KEY=sk-...
 gottem fetch https://example.com --show-meta
 
 # Race three routes in parallel — fastest valid response wins.
-gottem fetch https://example.com --mode race --routes firecrawl.scrape,spider.cloud.http,zenrows.basic
+gottem fetch https://example.com --mode race --routes firecrawl.scrape,spider.http,zenrows.basic
 
 # Hedge: start cheap, fire a backup at the next tier after a delay.
 gottem fetch https://example.com --mode hedge --hedge-delay-ms 2000

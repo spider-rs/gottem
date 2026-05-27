@@ -334,7 +334,7 @@ async fn cancel_aborts_in_flight_request() {
 
 fn crawl_route(server: &MockServer) -> Route {
     Route {
-        id: Arc::from("spider.cloud.crawl"),
+        id: Arc::from("spider.crawl"),
         adapter: AdapterKind::HttpJsonlStreamMany,
         endpoint: EndpointTemplate::parse(&format!("{}/crawl", server.uri())).unwrap(),
         method: HttpMethod::Post,
@@ -421,7 +421,7 @@ async fn jsonl_many_maps_all_crawl_params_and_streams_records() {
         "https://example.com/b"
     );
     assert_eq!(entries[2].depth, 2);
-    assert_eq!(entries[0].route_id.as_ref(), "spider.cloud.crawl");
+    assert_eq!(entries[0].route_id.as_ref(), "spider.crawl");
     assert_eq!(entries[0].tier, Tier::T4);
     assert_eq!(entries[0].cost_milli, 10);
 }

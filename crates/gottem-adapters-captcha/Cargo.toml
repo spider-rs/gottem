@@ -1,6 +1,6 @@
 [package]
 name = "gottem-adapters-captcha"
-version = "0.1.12"
+version = "0.1.13"
 description = "gottem CAPTCHA solver adapter. 2Captcha submit-then-poll protocol exposed as an Adapter — composable with the rest of the gottem ladder."
 readme = "README.md"
 edition.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core = { path = "../gottem-core", version = "0.1.12" }
+gottem-core = { path = "../gottem-core", version = "0.1.13" }
 reqwest     = { workspace = true, features = ["rustls", "gzip", "brotli", "http2", "form", "query"] }
 async-trait = { workspace = true }
 bytes       = { workspace = true }

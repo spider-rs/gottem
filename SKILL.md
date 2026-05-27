@@ -45,7 +45,7 @@ Useful flags:
 ```sh
 gottem fetch https://example.com --show-meta
 gottem fetch https://hard-site.com --require-js --format json
-gottem fetch https://x.com --mode race --routes spider.cloud.smart,firecrawl.scrape
+gottem fetch https://x.com --mode race --routes spider.smart,firecrawl.scrape
 ```
 
 ## probe — test reachability cheaply
