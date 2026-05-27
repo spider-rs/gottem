@@ -74,14 +74,14 @@ Memory stays constant regardless of crawl size.
 
 Engines:
 
-- `spider-cloud` — POST to Spider Cloud's `/crawl`, stream JSONL back. Vendor
+- `spider-cloud` — POST to Spider's `/crawl`, stream JSONL back. Vendor
   handles fanout; single network round-trip per crawl.
 - `local` — gottem-owned BFS. Each URL goes through the **same scrape ladder**
   as `gottem fetch`, so per-page escalation works mid-crawl. Link discovery
   uses `spider::page::Page::links` on bytes already fetched — no re-fetch for
   outlinks. Visited / depth / allow / deny / robots / budget all delegated to
   `spider::website::Website`.
-- `auto` — Spider Cloud if `SPIDER_CLOUD_API_KEY` is set, else local. Default.
+- `auto` — Spider if `SPIDER_CLOUD_API_KEY` is set, else local. Default.
 
 `--param k=v` repeatable; values land in the route body template as
 `{{param:k}}` (numbers and JSON literals parse correctly; everything else is a

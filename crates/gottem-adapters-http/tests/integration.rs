@@ -233,7 +233,7 @@ async fn http_json_missing_env_returns_auth_error() {
 #[tokio::test]
 async fn jsonl_stream_takes_first_record() {
     let server = MockServer::start().await;
-    // Spider Cloud-style chunked JSONL: multiple newline-delimited records.
+    // Spider-style chunked JSONL: multiple newline-delimited records.
     let body = "{\"content\":\"first record body that we care about\"}\n\
                 {\"content\":\"subsequent record ignored\"}\n";
     Mock::given(method("POST"))
@@ -268,7 +268,7 @@ async fn jsonl_stream_takes_first_record() {
 #[tokio::test]
 async fn jsonl_stream_unwraps_single_element_array() {
     let server = MockServer::start().await;
-    // Spider Cloud sometimes wraps the first emission as [{...}].
+    // Spider sometimes wraps the first emission as [{...}].
     let body = r#"[{"content":"wrapped record"}]"#;
     Mock::given(method("POST"))
         .and(path("/"))
@@ -359,7 +359,7 @@ fn crawl_route(server: &MockServer) -> Route {
 }
 
 /// End-to-end: POST a CrawlRequest, verify the wire body carries every generic
-/// param mapped to Spider Cloud's field names, and the JSONL response streams
+/// param mapped to Spider's field names, and the JSONL response streams
 /// into PageEntry yields one record at a time.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn jsonl_many_maps_all_crawl_params_and_streams_records() {

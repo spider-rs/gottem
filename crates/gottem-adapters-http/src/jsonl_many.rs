@@ -7,7 +7,7 @@
 //!
 //! Memory profile: only the in-flight chunk buffer (a single partial line
 //! plus the next reqwest chunk) and one [`PageEntry`] queued in the channel
-//! ever exist at once. Spider Cloud's `/crawl` JSONL can emit tens of
+//! ever exist at once. Spider's `/crawl` JSONL can emit tens of
 //! thousands of pages without the adapter's heap growing past a few KB.
 
 use std::sync::Arc;
@@ -29,7 +29,7 @@ use crate::shared::{
 };
 
 /// Streaming crawl adapter for vendors that natively stream JSONL (currently
-/// just Spider Cloud `/crawl`). One [`PageEntry`] per record.
+/// just Spider `/crawl`). One [`PageEntry`] per record.
 #[derive(Debug, Clone)]
 pub struct HttpJsonlStreamManyAdapter {
     client: Client,
@@ -61,13 +61,13 @@ impl CrawlAdapter for HttpJsonlStreamManyAdapter {
         // templates like `{{param:limit|10}}` resolve from CrawlRequest's
         // fields without forcing callers to populate `extra` manually.
         //
-        // Mapping (generic gottem → Spider Cloud `/crawl` field name):
+        // Mapping (generic gottem → Spider `/crawl` field name):
         //
         // - `limit`           → `limit`
         // - `depth`           → `depth`
         // - `subdomains`      → `subdomains`
         // - `tld`             → `tld`
-        // - `allow`           → `whitelist` (regex/glob, Spider Cloud uses this name)
+        // - `allow`           → `whitelist` (regex/glob, Spider uses this name)
         // - `deny`            → `blacklist`
         // - `respect_robots`  → `respect_robots_txt`
         //
@@ -235,7 +235,7 @@ fn parse_record(
         Ok(v) => v,
         Err(_) => return None,
     };
-    // Unwrap a single-element array wrapper (Spider Cloud sometimes wraps).
+    // Unwrap a single-element array wrapper (Spider sometimes wraps).
     let value = match value {
         serde_json::Value::Array(arr) => arr.into_iter().next().unwrap_or(serde_json::Value::Null),
         other => other,

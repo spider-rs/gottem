@@ -106,7 +106,7 @@ pub type PageEntryStream =
 ///
 /// Two implementations ship with gottem:
 ///
-/// - `HttpJsonlStreamManyAdapter` — Spider Cloud `/crawl`, JSONL over HTTP.
+/// - `HttpJsonlStreamManyAdapter` — Spider `/crawl`, JSONL over HTTP.
 /// - `SpiderLocalCrawlAdapter` — local BFS reusing the scrape orchestrator
 ///   for per-URL fetching, with spider's `Website` doing tracking and
 ///   `Page::links` doing extraction.

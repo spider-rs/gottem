@@ -49,7 +49,7 @@ pub struct Route {
     pub cost: u64,
 
     /// Tiebreaker within a tier when cost is equal. Lower = preferred.
-    /// Spider Cloud routes set this to 0; everything else defaults to 100.
+    /// Spider routes set this to 0; everything else defaults to 100.
     #[serde(default = "default_priority")]
     pub priority: u32,
 
@@ -174,7 +174,7 @@ pub enum AdapterKind {
     DirectHttp,
     /// POST JSON body, parse JSON response. Most cloud APIs (Firecrawl, ScrapingBee, Zyte, Brightdata Unblocker).
     HttpJson,
-    /// POST JSON body, parse chunked JSONL stream. Spider Cloud requires this — `.json()` will hang.
+    /// POST JSON body, parse chunked JSONL stream. Spider requires this — `.json()` will hang.
     HttpJsonlStream,
     /// POST JSON body, parse chunked JSONL stream, emit **one [`PageEntry`] per line**.
     /// Used by `spider.cloud.crawl` — the only vendor in gottem that natively streams
@@ -287,7 +287,7 @@ pub enum ResponseParse {
     RawBytes,
     /// JSON Pointer-ish dotted path like `$.data.markdown` or `$.results[0].html`.
     JsonPath { path: String },
-    /// First non-empty JSONL line, then dotted path into that record. Spider Cloud format.
+    /// First non-empty JSONL line, then dotted path into that record. Spider format.
     JsonlFirst { path: String },
     /// Every non-empty JSONL line as a separate record. Path is the dotted field
     /// inside each record to use as `PageEntry::content` (use `$` to keep the
@@ -304,7 +304,7 @@ pub enum ResponseParse {
 /// Each variant carries an optional `multiplier` (default 1.0) applied to the raw extracted
 /// value before it's returned. Use this to normalize known conversions into a common unit:
 ///
-/// - **Spider Cloud** — `jsonl_first { path = "$.costs.total", unit = "milli_cents",
+/// - **Spider** — `jsonl_first { path = "$.costs.total", unit = "milli_cents",
 ///   multiplier = 1.0 }` (10,000 credits = $1 = 10,000 milli-cents, so 1:1)
 /// - **Oxylabs** — `json_path { path = "$.results[0].cost", unit = "milli_cents",
 ///   multiplier = 10000.0 }` (response is in dollars)
@@ -334,7 +334,7 @@ pub enum CostExtract {
         #[serde(default = "default_multiplier")]
         multiplier: f64,
     },
-    /// Read a numeric field from the first JSONL record (Spider Cloud).
+    /// Read a numeric field from the first JSONL record (Spider).
     JsonlFirst {
         path: String,
         #[serde(default = "default_unit")]

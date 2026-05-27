@@ -9,7 +9,7 @@
 //!
 //! Two engines:
 //!
-//! - [`CrawlEngine::SpiderCloud`] — Spider Cloud's native `/crawl` endpoint,
+//! - [`CrawlEngine::SpiderCloud`] — Spider's native `/crawl` endpoint,
 //!   which streams JSONL. Each line becomes one [`PageEntry`].
 //! - [`CrawlEngine::Local`] — local BFS using the existing scrape ladder
 //!   for *each* page (so escalation works per URL), with spider's
@@ -85,7 +85,7 @@ pub struct CrawlStats {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CrawlEngine {
-    /// Pick `SpiderCloud` if the Spider Cloud key resolves for this
+    /// Pick `SpiderCloud` if the Spider key resolves for this
     /// request, else fall back to `Local`.
     #[default]
     Auto,
@@ -137,7 +137,7 @@ pub struct CrawlRequest {
     /// Ignored by `SpiderCloud` (the vendor controls parallelism).
     pub concurrency: u32,
     /// Free-form crawl-level hints — surfaced to adapters that want them
-    /// (e.g. Spider Cloud-specific knobs not modelled here).
+    /// (e.g. Spider-specific knobs not modelled here).
     pub extra: HashMap<String, serde_json::Value>,
 }
 

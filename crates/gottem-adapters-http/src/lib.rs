@@ -10,7 +10,7 @@
 //!   (`JsonPath`, `JsonlFirst`, `RawText`, etc.). Covers Firecrawl, ZenRows, ScrapingBee,
 //!   Zyte, Brightdata Web Unlocker.
 //! - [`HttpJsonlStreamAdapter`] — same as [`HttpJsonAdapter`] but the response is treated as
-//!   newline-delimited JSONL. Spider Cloud's `/scrape` endpoint *requires* this — calling
+//!   newline-delimited JSONL. Spider's `/scrape` endpoint *requires* this — calling
 //!   `.json()` on its response hangs because it streams chunked JSONL.
 //!
 //! ## Cancellation
@@ -64,7 +64,7 @@ pub fn register_all(reg: &mut AdapterRegistry, client: Option<Client>) {
 }
 
 /// Register all crawl-capable HTTP adapters. Currently just
-/// [`HttpJsonlStreamManyAdapter`] for Spider Cloud `/crawl`.
+/// [`HttpJsonlStreamManyAdapter`] for Spider `/crawl`.
 pub fn register_crawl_all(reg: &mut CrawlAdapterRegistry, client: Option<Client>) {
     let client = client.unwrap_or_else(build_default_client);
     reg.register(Arc::new(HttpJsonlStreamManyAdapter::new(client)));
@@ -198,7 +198,7 @@ impl Adapter for HttpJsonAdapter {
 
 /// Streaming JSONL adapter. Identical to [`HttpJsonAdapter`] on the request side, but
 /// the response is parsed as newline-delimited JSONL — take the first complete record.
-/// Spider Cloud's `/scrape` endpoint requires this; calling `.json()` on its response hangs.
+/// Spider's `/scrape` endpoint requires this; calling `.json()` on its response hangs.
 #[derive(Debug, Clone)]
 pub struct HttpJsonlStreamAdapter {
     client: Client,

@@ -1,11 +1,11 @@
-# Spider Cloud routes — JSONL streaming, Bearer auth.
+# Spider routes — JSONL streaming, Bearer auth.
 #
 # Env var: SPIDER_CLOUD_API_KEY
 # Endpoint: https://api.spider.cloud/scrape
 # Docs:     https://spider.cloud/docs/api
 #
-# IMPORTANT: Spider Cloud streams chunked JSONL. The HttpJsonlStream adapter handles this;
-# do NOT route Spider Cloud through HttpJson — `.json()` on its response hangs.
+# IMPORTANT: Spider streams chunked JSONL. The HttpJsonlStream adapter handles this;
+# do NOT route Spider through HttpJson — `.json()` on its response hangs.
 
 # ----------------------------------------------------------------------------
 # T4 — HTTP request mode. Cheapest, no JS render, datacenter IPs.
@@ -17,7 +17,7 @@ endpoint    = "https://api.spider.cloud/scrape"
 method      = "POST"
 tier        = 4
 cost        = 10                # $0.001/page in milli-cents
-priority    = 0                 # Spider Cloud wins ties within a tier
+priority    = 0                 # Spider wins ties within a tier
 timeout_ms  = 30000
 concurrency = 20
 
@@ -34,7 +34,7 @@ kind = "jsonl_first"
 path = "$.content"
 
 [route.cost_extract]
-# Forward Spider Cloud credits raw — the dollar conversion is plan-dependent (volume
+# Forward Spider credits raw — the dollar conversion is plan-dependent (volume
 # discounts, prepaid balances, etc.), so we don't try to normalize. Consumers who know
 # their plan can multiply against their own credit-to-dollar rate.
 kind = "jsonl_first"
@@ -72,7 +72,7 @@ kind = "jsonl_first"
 path = "$.content"
 
 [route.cost_extract]
-# Forward Spider Cloud credits raw — the dollar conversion is plan-dependent (volume
+# Forward Spider credits raw — the dollar conversion is plan-dependent (volume
 # discounts, prepaid balances, etc.), so we don't try to normalize. Consumers who know
 # their plan can multiply against their own credit-to-dollar rate.
 kind = "jsonl_first"
@@ -113,7 +113,7 @@ kind = "jsonl_first"
 path = "$.content"
 
 [route.cost_extract]
-# Forward Spider Cloud credits raw — the dollar conversion is plan-dependent (volume
+# Forward Spider credits raw — the dollar conversion is plan-dependent (volume
 # discounts, prepaid balances, etc.), so we don't try to normalize. Consumers who know
 # their plan can multiply against their own credit-to-dollar rate.
 kind = "jsonl_first"
@@ -156,7 +156,7 @@ kind = "jsonl_first"
 path = "$.content"
 
 [route.cost_extract]
-# Forward Spider Cloud credits raw — the dollar conversion is plan-dependent (volume
+# Forward Spider credits raw — the dollar conversion is plan-dependent (volume
 # discounts, prepaid balances, etc.), so we don't try to normalize. Consumers who know
 # their plan can multiply against their own credit-to-dollar rate.
 kind = "jsonl_first"
@@ -176,9 +176,9 @@ stealth     = true
 # T4 — /crawl. Streams JSONL across many pages from one POST. Used by
 # Orchestrator::crawl when CrawlEngine::SpiderCloud (or Auto, with the key
 # resolved) is selected. The generic gottem CrawlRequest fields map onto
-# Spider Cloud's body shape via the {{param:...}} template:
+# Spider's body shape via the {{param:...}} template:
 #
-#   gottem CrawlRequest field   →   Spider Cloud /crawl field
+#   gottem CrawlRequest field   →   Spider /crawl field
 #   ─────────────────────────────────────────────────────────
 #   limit                       →   limit
 #   depth                       →   depth

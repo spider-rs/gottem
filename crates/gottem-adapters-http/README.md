@@ -8,7 +8,7 @@ Provides three adapters, all sharing one `reqwest::Client` for connection poolin
 
 - **`DirectHttpAdapter`** (`direct_http`) — plain GET/POST. Body passed through as-is.
 - **`HttpJsonAdapter`** (`http_json`) — POST a JSON body rendered from the route's `BodyTemplate` (with `{{url}}` substitution), parse the JSON response per the route's `ResponseParse` spec. Covers Firecrawl, ZenRows, ScrapingBee, Zyte, Brightdata Web Unlocker.
-- **`HttpJsonlStreamAdapter`** (`http_jsonl_stream`) — same as `http_json` but the response is treated as newline-delimited JSONL. Required by Spider Cloud's `/scrape` endpoint, which streams chunked JSONL.
+- **`HttpJsonlStreamAdapter`** (`http_jsonl_stream`) — same as `http_json` but the response is treated as newline-delimited JSONL. Required by Spider's `/scrape` endpoint, which streams chunked JSONL.
 
 Every adapter wraps its `send()` and `bytes()` futures in `tokio::select!` against the orchestrator's `CancelToken`, so a winning race or Ctrl-C aborts the in-flight request cleanly.
 

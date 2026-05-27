@@ -33,7 +33,7 @@
 //! `spider::Website` natively supports
 //! [`SpiderCloudConfig`](spider::configuration::SpiderCloudConfig) (modes:
 //! `Proxy` / `Api` / `Unblocker` / `Fallback` / `Smart`) — when configured,
-//! spider routes its internal fetcher through Spider Cloud's remote API
+//! spider routes its internal fetcher through Spider's remote API
 //! transparently. Combined with [`Website::subscribe`](spider::website::Website::subscribe)'s
 //! broadcast channel, the entire crawl loop (visited, depth, allow/deny,
 //! robots, fetch, link extraction) runs inside spider's core engine with
@@ -45,7 +45,7 @@
 //! future `SpiderNativeCrawlAdapter` (gated behind the `spider_cloud`
 //! feature, which forwards to `spider/spider_cloud`) will offer the
 //! fully-delegated path for callers who prefer spider's fetcher with
-//! Spider Cloud remote routing over gottem's ladder.
+//! Spider remote routing over gottem's ladder.
 //!
 //! ## Tracking parity with `Website::crawl_concurrent_raw`
 //!

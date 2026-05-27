@@ -33,14 +33,14 @@ Hedge mode adds `--hedge-delay-ms` and `--hedge-count`. Race mode honors `--rout
 - **T0**: free local HTTP via spider::Client
 - **T1–T2**: same + proxy rotation
 - **T3**: local headless Chrome (chrome adapter)
-- **T4** ($0.001/page): Firecrawl, Spider Cloud HTTP, ScrapingBee, ZenRows basic
+- **T4** ($0.001/page): Firecrawl, Spider HTTP, ScrapingBee, ZenRows basic
 - **T5** ($0.005): + JS render
 - **T6** ($0.0075): + residential proxy
-- **T7** ($0.008–$0.010): smart unblockers — Spider Cloud Smart, Zyte API, Brightdata Unblocker
+- **T7** ($0.008–$0.010): smart unblockers — Spider Smart, Zyte API, Brightdata Unblocker
 - **T8** ($0.010–$0.015): browser-as-a-service — Browserless, Brightdata Scraping Browser, Spider Browser Cloud
 - **T9** ($0.02+): last resort — Apify, Oxylabs, 2Captcha solver chains, Browser Use AI agent, Browserbase
 
-Within a tier, cheapest first; Spider Cloud's `priority = 0` wins cost ties.
+Within a tier, cheapest first; Spider's `priority = 0` wins cost ties.
 
 ## Routes are data
 
@@ -75,7 +75,7 @@ Five adapter kinds cover essentially every scraping vendor in the wild:
 
 - **`direct_http`** — plain GET/POST
 - **`http_json`** — POST JSON, parse JSON (Firecrawl, Zyte, Brightdata, Apify, Oxylabs)
-- **`http_jsonl_stream`** — POST JSON, parse streaming JSONL (Spider Cloud only)
+- **`http_jsonl_stream`** — POST JSON, parse streaming JSONL (Spider only)
 - **`chrome_cdp`** — WebSocket CDP (Browserless, Brightdata Scraping Browser, Spider Browser Cloud)
 - **`captcha_2captcha`** + **`browser_use`** — submit + poll protocols baked in
 
@@ -95,7 +95,7 @@ After enough samples for a `(route, domain)` pair, the orchestrator skips the la
 
 ## Per-request cost forwarding
 
-`ScrapeResponse.cost_actual_units` + `cost_actual_unit` carry the vendor's reported per-request cost (ZenRows `Zr-Cost` header, Spider Cloud JSONL `$.costs.total`, etc.). Static `cost_milli` is always present; actual is `Option` because not every vendor exposes it.
+`ScrapeResponse.cost_actual_units` + `cost_actual_unit` carry the vendor's reported per-request cost (ZenRows `Zr-Cost` header, Spider JSONL `$.costs.total`, etc.). Static `cost_milli` is always present; actual is `Option` because not every vendor exposes it.
 
 ## Force a single provider for testing
 

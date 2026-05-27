@@ -13,7 +13,7 @@
 //! let catalog = register_all(RouteCatalogBuilder::new())
 //!     .expect("builtin routes load")
 //!     .build();
-//! assert!(catalog.len() >= 4); // Spider Cloud (4 routes) + Firecrawl (2) by default
+//! assert!(catalog.len() >= 4); // Spider (4 routes) + Firecrawl (2) by default
 //! ```
 //!
 //! # Per-vendor selection
@@ -129,7 +129,7 @@ pub fn add_local(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchErr
     b.add_toml(include_str!("../routes/local.toml"))
 }
 
-/// Spider Cloud — JSONL streaming, Bearer auth. 4 routes spanning T4 (HTTP) → T7 (smart unblocker).
+/// Spider — JSONL streaming, Bearer auth. 4 routes spanning T4 (HTTP) → T7 (smart unblocker).
 /// Requires env var `SPIDER_CLOUD_API_KEY`.
 #[cfg(feature = "spider-cloud")]
 pub fn add_spider_cloud(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {

@@ -198,7 +198,7 @@ fn parse_full_json(body: &[u8]) -> Option<serde_json::Value> {
 }
 
 /// Deserialize the first JSONL record, unwrapping a single-element array wrapper
-/// (Spider Cloud sometimes wraps the record). `None` if no parseable record is found.
+/// (Spider sometimes wraps the record). `None` if no parseable record is found.
 fn parse_first_record(body: &[u8]) -> Option<serde_json::Value> {
     let line = first_jsonl_record(body)?;
     let parsed: serde_json::Value = serde_json::from_slice(line).ok()?;

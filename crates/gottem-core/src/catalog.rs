@@ -84,7 +84,7 @@ impl RouteCatalogBuilder {
             by_tier.entry(r.tier).or_default().push(r.clone());
             by_id.insert(r.id.clone(), r);
         }
-        // Within a tier: lowest cost first, then by priority (Spider Cloud's are 0 — wins
+        // Within a tier: lowest cost first, then by priority (Spider's are 0 — wins
         // ties), then by id for a fully deterministic ordering.
         for v in by_tier.values_mut() {
             v.sort_by(|a, b| {

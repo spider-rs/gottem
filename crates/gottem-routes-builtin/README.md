@@ -6,7 +6,7 @@ Built-in vendor route catalogs for [gottem](https://github.com/spider-rs/gottem)
 
 Each vendor is a Cargo feature flag. Routes ship as embedded TOML (`include_str!`) and load into a `gottem_core::RouteCatalogBuilder` at runtime — no file I/O, no network during catalog construction.
 
-Vendors covered include Spider Cloud, Firecrawl, ZenRows, ScrapingBee, Zyte, Brightdata (Web Unlocker and Scraping Browser), Browserless, Spider Browser Cloud, Apify, Oxylabs, 2Captcha, Browserbase, and Browser Use.
+Vendors covered include Spider, Firecrawl, ZenRows, ScrapingBee, Zyte, Brightdata (Web Unlocker and Scraping Browser), Browserless, Spider Browser Cloud, Apify, Oxylabs, 2Captcha, Browserbase, and Browser Use.
 
 ## Quick start
 
@@ -17,7 +17,7 @@ use gottem_routes_builtin::register_all;
 let catalog = register_all(RouteCatalogBuilder::new())
     .expect("builtin routes load")
     .build();
-// Spider Cloud (4 routes) + Firecrawl (2) are enabled by default.
+// Spider (4 routes) + Firecrawl (2) are enabled by default.
 ```
 
 ## Per-vendor selection

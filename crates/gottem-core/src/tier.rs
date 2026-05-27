@@ -11,9 +11,9 @@ use serde::{Deserialize, Serialize};
 /// | T1   | reqwest + datacenter proxy rotation                    | $0.0001    |
 /// | T2   | reqwest + residential proxy rotation                   | $0.001     |
 /// | T3   | Local Chrome (chromiumoxide, spider::Website)          | $0 compute |
-/// | T4   | Spider Cloud HTTP, Firecrawl basic                     | $0.001     |
-/// | T5   | Spider Cloud Chrome, Firecrawl JS, ScrapingBee         | $0.005     |
-/// | T6   | Spider Cloud Chrome + residential, ZenRows premium     | $0.0075    |
+/// | T4   | Spider HTTP, Firecrawl basic                     | $0.001     |
+/// | T5   | Spider Chrome, Firecrawl JS, ScrapingBee         | $0.005     |
+/// | T6   | Spider Chrome + residential, ZenRows premium     | $0.0075    |
 /// | T7   | Spider Smart Unblocker, Brightdata Unblocker, Zyte     | $0.01      |
 /// | T8   | Brightdata Scraping Browser, Browserless CDP           | $0.015     |
 /// | T9   | Oxylabs, Apify actors, CAPTCHA solver chains           | $0.05+     |

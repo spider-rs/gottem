@@ -73,7 +73,7 @@ Lower tier = cheaper and faster. Higher tier = handles tougher anti-bot defenses
 |------|-------------:|----------------------------------------------------------------------------|
 | T0   | free         | direct local HTTP (you bring the URL, we send a GET)                       |
 | T1–T3| varies       | local HTTP through a proxy, or local headless Chrome                        |
-| T4   | $0.001       | basic cloud HTTP (Firecrawl, Spider Cloud HTTP, ScrapingBee, ZenRows)      |
+| T4   | $0.001       | basic cloud HTTP (Firecrawl, Spider HTTP, ScrapingBee, ZenRows)      |
 | T5   | $0.005       | cloud HTTP **with JS render**                                              |
 | T6   | $0.0075      | cloud HTTP + **residential proxy**                                         |
 | T7   | $0.008–0.010 | smart unblockers — auto-fallback inside the vendor (Spider Smart, Zyte, Brightdata Unblocker) |
@@ -90,7 +90,7 @@ You can pin the tier band you want with `--tier-min` / `--tier-max`, or hard-cap
 
 | Vendor                    | Routes (count) | Env var                          |
 |---------------------------|---------------:|----------------------------------|
-| Spider Cloud              | 4              | `SPIDER_CLOUD_API_KEY`           |
+| Spider              | 4              | `SPIDER_CLOUD_API_KEY`           |
 | Firecrawl                 | 2              | `FIRECRAWL_API_KEY`              |
 | ZenRows                   | 3              | `ZENROWS_API_KEY`                |
 | ScrapingBee               | 3              | `SCRAPINGBEE_API_KEY`            |
@@ -139,7 +139,7 @@ gottem also crawls — streaming, no in-memory accumulation. One CLI:
 # Local BFS using your scrape ladder for each page.
 gottem crawl https://example.com --depth 2 --limit 50
 
-# Force the Spider Cloud /crawl endpoint (native JSONL streaming).
+# Force the Spider /crawl endpoint (native JSONL streaming).
 gottem crawl https://example.com --engine spider-cloud --depth 3 --limit 100
 
 # Subdomains, allow/deny patterns, robots.txt.
@@ -163,9 +163,9 @@ Two engines, picked by `--engine`:
 
 | Engine | What it does |
 |---|---|
-| `spider-cloud` | POSTs to Spider Cloud's `/crawl` and streams the JSONL response back. Single round-trip per crawl, vendor handles fanout. Requires `SPIDER_CLOUD_API_KEY`. |
+| `spider-cloud` | POSTs to Spider's `/crawl` and streams the JSONL response back. Single round-trip per crawl, vendor handles fanout. Requires `SPIDER_CLOUD_API_KEY`. |
 | `local` | BFS owned by gottem: every URL goes through the *same scrape ladder* you'd use for a one-off `fetch`, so per-page escalation (T0 → T7) still works mid-crawl. Link discovery uses [`spider::page::Page::links`](https://docs.rs/spider) on bytes already returned — no re-fetch for outlink extraction. Visited / depth / allow / deny / robots / budget all delegated to `spider::website::Website`. |
-| `auto` | Spider Cloud if the key is set, else local. (Default.) |
+| `auto` | Spider if the key is set, else local. (Default.) |
 
 Library use — subscriber sugar over the raw `Stream`:
 
@@ -252,7 +252,7 @@ Adding ZenRows-style query-string auth is the same pattern with `{{env:NAME}}` i
 
 - **`direct_http`** — plain GET/POST
 - **`http_json`** — POST JSON, parse JSON (Firecrawl, Zyte, Brightdata, Apify, Oxylabs)
-- **`http_jsonl_stream`** — POST JSON, parse streaming JSONL (Spider Cloud)
+- **`http_jsonl_stream`** — POST JSON, parse streaming JSONL (Spider)
 - **`chrome_cdp`** — WebSocket CDP (Brightdata Scraping Browser, Browserless)
 - **`captcha_2captcha`** — submit + poll (2Captcha)
 

@@ -168,9 +168,9 @@ enum Format {
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum CrawlEngineArg {
-    /// Pick Spider Cloud if `SPIDER_CLOUD_API_KEY` is set, else Local.
+    /// Pick Spider if `SPIDER_CLOUD_API_KEY` is set, else Local.
     Auto,
-    /// Spider Cloud's `/crawl` endpoint (native JSONL streaming).
+    /// Spider's `/crawl` endpoint (native JSONL streaming).
     SpiderCloud,
     /// Local BFS using the orchestrator's scrape ladder + spider's link
     /// extractor.
@@ -216,7 +216,7 @@ struct CrawlArgs {
     #[arg(long)]
     deny: Vec<String>,
 
-    /// Honor `robots.txt`. Local engine fetches/parses; Spider Cloud
+    /// Honor `robots.txt`. Local engine fetches/parses; Spider
     /// forwards as `respect_robots_txt`.
     #[arg(long)]
     respect_robots: bool,
@@ -226,7 +226,7 @@ struct CrawlArgs {
     engine: CrawlEngineArg,
 
     /// Worker concurrency for the local engine (URLs fetched in parallel).
-    /// Ignored by the Spider Cloud engine.
+    /// Ignored by the Spider engine.
     #[arg(long, default_value_t = 4)]
     concurrency: u32,
 
@@ -677,7 +677,7 @@ fn routes_list(catalog: &RouteCatalog) -> Result<()> {
     );
     println!("{}", "-".repeat(110));
     let mut routes: Vec<_> = catalog.all().collect();
-    // Mirror the catalog's internal sort: (tier, cost, priority, id). Spider Cloud's
+    // Mirror the catalog's internal sort: (tier, cost, priority, id). Spider's
     // priority=0 surfaces it ahead of equal-cost peers within a tier.
     routes.sort_by_key(|r| (r.tier, r.cost, r.priority, r.id.to_string()));
     for r in routes {
