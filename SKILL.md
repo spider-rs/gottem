@@ -87,10 +87,45 @@ Engines:
 `{{param:k}}` (numbers and JSON literals parse correctly; everything else is a
 string). Use this for vendor-specific knobs without editing TOML.
 
+### Library use — subscriber sugar over a Stream
+
+```rust
+use std::sync::Arc;
+use gottem_core::{CancelToken, ControlFlow, CrawlRequest, Orchestrator};
+use url::Url;
+
+let orch: Arc<Orchestrator> = /* built with crawl adapters installed */;
+orch.crawl_builder(
+        CrawlRequest::new(Url::parse("https://example.com")?)
+            .with_limit(50)
+            .with_depth(2),
+    )
+    .on_page(|page| async move {
+        save(page).await;
+        ControlFlow::Continue
+    })
+    .run(CancelToken::new())
+    .await?;
+```
+
+Or the raw stream: `orch.crawl(req, cancel).await?` returns
+`Stream<Item = Result<PageEntry>>`.
+
+### Custom transport via `spider::RemoteFetcher`
+
+Spider 2.51.198 exposes `Website::with_remote_fetcher` — implement
+`spider::fetcher::RemoteFetcher` and spider drives the full crawl engine
+(visited / depth / allow-deny / robots / link extraction / subscription
+channel) using your transport for the per-URL fetch. Useful when you want
+spider's engine but a non-default transport (an internal API, a custom
+proxy mesh, etc.). gottem's own local engine doesn't currently route
+through this hook — its scrape ladder needs hop-depth gating which spider
+will add in a future patch.
+
 ## routes — inspect the vendor catalog
 
 ```sh
-gottem routes list                    # tabular catalog (22 builtin routes, 13 vendors)
+gottem routes list                    # tabular catalog (27 builtin routes, 13 vendors + local crawl)
 gottem routes show <route-id>          # full detail for one route
 gottem routes validate                # check env vars are set for each route's auth
 gottem --config routes.toml fetch URL  # layer custom vendor routes on top of builtin
