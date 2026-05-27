@@ -282,8 +282,19 @@ impl CrawlAdapter for SpiderLocalCrawlAdapter {
             return Err(FetchError::Config("frontier closed before seed".into()));
         }
 
+        // Worker concurrency gate. Resolution order:
+        //   1. Caller-provided `adaptive_concurrency` handle — lets an
+        //      admission controller resize the crawl's worker fan-out
+        //      mid-flight (e.g. a gottem-cloud LoadTracker handing its
+        //      live `AdaptiveSemaphore` here).
+        //   2. Fresh `Semaphore::new(concurrency)` — byte-for-byte the
+        //      pre-adaptive behavior for callers that never touched the
+        //      new builder.
         let workers_n = req.concurrency.max(1) as usize;
-        let semaphore = Arc::new(Semaphore::new(workers_n));
+        let semaphore = match req.adaptive_concurrency.clone() {
+            Some(sem) => sem,
+            None => Arc::new(Semaphore::new(workers_n)),
+        };
         let cancel = cancel.clone();
         let scrape_template = req.scrape.clone();
         let strategy = self.strategy.clone();

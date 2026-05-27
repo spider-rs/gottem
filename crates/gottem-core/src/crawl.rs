@@ -136,6 +136,16 @@ pub struct CrawlRequest {
     /// Worker concurrency for the local engine (URLs fetched in parallel).
     /// Ignored by `SpiderCloud` (the vendor controls parallelism).
     pub concurrency: u32,
+    /// Optional externally-owned worker-concurrency gate. When set, the
+    /// local engine prefers this `Arc<tokio::sync::Semaphore>` over a
+    /// freshly-built `Semaphore::new(concurrency)`, letting an admission
+    /// controller resize the crawl's worker fan-out mid-flight (typically
+    /// by holding the other end of an
+    /// [`spider::utils::adaptive_concurrency::AdaptiveSemaphore`] and
+    /// calling `set_target`). `None` is the default and preserves the
+    /// existing static-`concurrency` behavior byte-for-byte. Ignored by
+    /// `SpiderCloud` (the vendor controls parallelism there too).
+    pub adaptive_concurrency: Option<Arc<tokio::sync::Semaphore>>,
     /// Free-form crawl-level hints — surfaced to adapters that want them
     /// (e.g. Spider-specific knobs not modelled here).
     pub extra: HashMap<String, serde_json::Value>,
@@ -156,6 +166,7 @@ impl CrawlRequest {
             respect_robots: false,
             engine: CrawlEngine::default(),
             concurrency: 4,
+            adaptive_concurrency: None,
             extra: HashMap::new(),
         }
     }
@@ -194,6 +205,21 @@ impl CrawlRequest {
     }
     pub fn with_concurrency(mut self, n: u32) -> Self {
         self.concurrency = n.max(1);
+        self
+    }
+
+    /// Hand the crawl an external worker-concurrency gate. The local
+    /// engine will acquire from this semaphore instead of one it builds
+    /// itself from `concurrency`, so the controller holding the matching
+    /// [`spider::utils::adaptive_concurrency::AdaptiveSemaphore`] (or any
+    /// `Arc<tokio::sync::Semaphore>` clone) can resize the worker pool
+    /// in-flight via `set_target` / `add_permits` / `forget_permits`.
+    ///
+    /// Pass `None` to clear an existing handle and fall back to the
+    /// static-`concurrency` path — strictly opt-in; existing callers
+    /// see no behavior change.
+    pub fn with_adaptive_concurrency(mut self, sem: Option<Arc<tokio::sync::Semaphore>>) -> Self {
+        self.adaptive_concurrency = sem;
         self
     }
 
