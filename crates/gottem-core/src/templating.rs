@@ -310,10 +310,15 @@ mod tests {
 
     #[test]
     fn endpoint_param_default_percent_encoded() {
-        let out =
-            render_endpoint("https://api.test/?q={{param:q|with space}}", &req("https://x/"))
-                .unwrap();
-        assert!(out.contains("with+space") || out.contains("with%20space"), "got {out}");
+        let out = render_endpoint(
+            "https://api.test/?q={{param:q|with space}}",
+            &req("https://x/"),
+        )
+        .unwrap();
+        assert!(
+            out.contains("with+space") || out.contains("with%20space"),
+            "got {out}"
+        );
     }
 
     #[test]

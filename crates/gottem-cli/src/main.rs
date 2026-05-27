@@ -790,8 +790,8 @@ async fn run_crawl(args: CrawlArgs, config_path: Option<&std::path::Path>) -> Re
         // remains a string. This lets `--param limit=50` produce a bare
         // `50` in JSON bodies, while `--param mode=chrome` stays
         // `"chrome"` inside the caller's quotes.
-        let value: serde_json::Value = serde_json::from_str(v)
-            .unwrap_or_else(|_| serde_json::Value::String(v.clone()));
+        let value: serde_json::Value =
+            serde_json::from_str(v).unwrap_or_else(|_| serde_json::Value::String(v.clone()));
         req.scrape.extra.insert(k.clone(), value);
     }
 

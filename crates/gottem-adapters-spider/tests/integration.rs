@@ -309,27 +309,31 @@ async fn build_local_crawl_harness() -> (Arc<Orchestrator>, MockServer) {
     // Root → /a + /b
     Mock::given(method("GET"))
         .and(path("/"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(
-            format!(
-                "<html><body><a href=\"{srv}/a\">a</a><a href=\"{srv}/b\">b</a></body></html>",
-                srv = server.uri()
-            )
-            .as_bytes(),
-            "text/html",
-        ))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(
+                format!(
+                    "<html><body><a href=\"{srv}/a\">a</a><a href=\"{srv}/b\">b</a></body></html>",
+                    srv = server.uri()
+                )
+                .as_bytes(),
+                "text/html",
+            ),
+        )
         .mount(&server)
         .await;
     // /a → /c
     Mock::given(method("GET"))
         .and(path("/a"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(
-            format!(
-                "<html><body><a href=\"{srv}/c\">c</a></body></html>",
-                srv = server.uri()
-            )
-            .as_bytes(),
-            "text/html",
-        ))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(
+                format!(
+                    "<html><body><a href=\"{srv}/c\">c</a></body></html>",
+                    srv = server.uri()
+                )
+                .as_bytes(),
+                "text/html",
+            ),
+        )
         .mount(&server)
         .await;
     // /b — leaf
@@ -439,7 +443,10 @@ async fn local_crawl_respects_limit() {
         item.expect("page entry");
         count += 1;
     }
-    assert!(count <= 2, "limit=2 should yield at most 2 pages, got {count}");
+    assert!(
+        count <= 2,
+        "limit=2 should yield at most 2 pages, got {count}"
+    );
     assert!(count >= 1, "limit=2 should yield at least the seed");
 }
 
@@ -463,7 +470,10 @@ async fn local_crawl_engine_falls_back_to_local_when_no_spider_cloud_key() {
         }
         assert_eq!(entry.route_id.as_ref(), "local.crawl");
     }
-    assert!(got_seed, "auto should have fallen back to local engine and visited the seed");
+    assert!(
+        got_seed,
+        "auto should have fallen back to local engine and visited the seed"
+    );
 }
 
 #[allow(dead_code)]

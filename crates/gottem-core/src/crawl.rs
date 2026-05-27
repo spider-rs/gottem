@@ -296,8 +296,7 @@ impl CrawlBuilder {
             match item {
                 Ok(page) => {
                     stats.pages = stats.pages.saturating_add(1);
-                    stats.cost_milli_total =
-                        stats.cost_milli_total.saturating_add(page.cost_milli);
+                    stats.cost_milli_total = stats.cost_milli_total.saturating_add(page.cost_milli);
                     if let Some(h) = &self.on_page {
                         if h(page).await == ControlFlow::Stop {
                             cancel.cancel();

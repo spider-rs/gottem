@@ -68,9 +68,7 @@ pub use cancel::CancelToken;
 pub use capabilities::Capabilities;
 pub use catalog::{RouteCatalog, RouteCatalogBuilder};
 pub use circuit::CircuitBreaker;
-pub use crawl::{
-    ControlFlow, CrawlBuilder, CrawlEngine, CrawlRequest, CrawlStats, PageEntry,
-};
+pub use crawl::{ControlFlow, CrawlBuilder, CrawlEngine, CrawlRequest, CrawlStats, PageEntry};
 pub use error::FetchError;
 pub use orchestrator::{Mode, Orchestrator};
 pub use request::{Format, HttpMethod, ScrapeRequest};

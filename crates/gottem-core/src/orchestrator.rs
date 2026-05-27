@@ -522,9 +522,9 @@ impl Orchestrator {
                 "crawl adapters not installed — call Orchestrator::install_crawl_adapters before crawl()".into(),
             )
         })?;
-        let adapter = registry.get(&route.adapter).ok_or_else(|| {
-            FetchError::UnknownAdapter(route.adapter.as_str().into())
-        })?;
+        let adapter = registry
+            .get(&route.adapter)
+            .ok_or_else(|| FetchError::UnknownAdapter(route.adapter.as_str().into()))?;
 
         adapter.execute(&route, &req, &cancel).await
     }

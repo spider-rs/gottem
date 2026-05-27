@@ -2252,7 +2252,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3288,7 +3288,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "gottem-adapters-browseruse"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3303,7 +3303,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-captcha"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3318,7 +3318,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-chrome"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3332,7 +3332,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-http"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3349,7 +3349,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-spider"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3366,7 +3366,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-cli"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "anyhow",
  "clap",
@@ -3386,7 +3386,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-core"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3406,7 +3406,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-routes-builtin"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "gottem-core",
 ]
@@ -4363,7 +4363,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7265,7 +7265,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -7332,9 +7332,9 @@ dependencies = [
 
 [[package]]
 name = "spider"
-version = "2.51.197"
+version = "2.51.198"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e9da38f8d0fc1e91636287d21fb404b574b48a1e73bf898cc2f429c69a94274"
+checksum = "9f38808712b487a4914888ac8f949d5d27f2689f885aee9a6f3bafedf92ccc64"
 dependencies = [
  "ahash",
  "aho-corasick",
@@ -7851,7 +7851,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

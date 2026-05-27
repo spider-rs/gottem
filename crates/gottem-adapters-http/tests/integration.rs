@@ -407,7 +407,13 @@ async fn jsonl_many_maps_all_crawl_params_and_streams_records() {
     assert_eq!(entries[0].url.as_str(), "https://example.com/");
     assert_eq!(entries[0].status, 200);
     assert_eq!(entries[0].depth, 0);
-    assert_eq!(entries[0].content.as_deref().map(|b| std::str::from_utf8(b).unwrap()), Some("# root"));
+    assert_eq!(
+        entries[0]
+            .content
+            .as_deref()
+            .map(|b| std::str::from_utf8(b).unwrap()),
+        Some("# root")
+    );
     assert_eq!(entries[1].url.as_str(), "https://example.com/a");
     assert_eq!(entries[1].depth, 1);
     assert_eq!(

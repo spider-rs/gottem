@@ -302,8 +302,8 @@ impl CrawlAdapter for SpiderLocalCrawlAdapter {
         // workers' channel sends start failing, consumer's stream ends.
         tokio::spawn(async move {
             let mut pending: u64 = 1; // seed
-            // Holds onto worker spawn permits implicitly via the workers
-            // themselves dropping them; semaphore is shared across workers.
+                                      // Holds onto worker spawn permits implicitly via the workers
+                                      // themselves dropping them; semaphore is shared across workers.
             loop {
                 tokio::select! {
                     biased;

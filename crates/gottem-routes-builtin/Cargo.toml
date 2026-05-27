@@ -1,6 +1,6 @@
 [package]
 name = "gottem-routes-builtin"
-version = "0.1.9"
+version = "0.1.10"
 description = "Built-in vendor route catalogs for gottem. Each vendor is a feature flag; routes ship as embedded TOML and load into a gottem RouteCatalogBuilder."
 readme = "README.md"
 edition.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
-gottem-core = { path = "../gottem-core", version = "0.1.9" }
+gottem-core = { path = "../gottem-core", version = "0.1.10" }
 
 [features]
 default            = ["spider-cloud", "firecrawl"]
