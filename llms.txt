@@ -1,6 +1,6 @@
 # gottem
 
-> Universal scraper. One CLI and one Rust library that talks to every major scraping vendor through a single tiered ladder. Cheapest-first by default; escalates on failure; races or hedges when latency matters. Powered by [spider](https://github.com/spider-rs/spider).
+> Universal scraper. One CLI and one Rust library that talks to every major scraping vendor through a single tiered ladder. Lowest-cost-first by default; escalates on failure; races or hedges when latency matters. Powered by [spider](https://github.com/spider-rs/spider).
 
 Built around two concepts: **routes** are data (TOML rows describing a vendor endpoint), **adapters** are code (a small finite set of protocol families). Adding a new vendor is a config change, not a release. 22 builtin routes across 13 vendors span T0–T9 of the cost/capability ladder.
 
@@ -40,7 +40,7 @@ Hedge mode adds `--hedge-delay-ms` and `--hedge-count`. Race mode honors `--rout
 - **T8** ($0.010–$0.015): browser-as-a-service — Browserless, Brightdata Scraping Browser, Spider Browser Cloud
 - **T9** ($0.02+): last resort — Apify, Oxylabs, 2Captcha solver chains, Browser Use AI agent, Browserbase
 
-Within a tier, cheapest first; Spider's `priority = 0` wins cost ties.
+Within a tier, lowest-cost first; Spider's `priority = 0` wins cost ties.
 
 ## Routes are data
 
@@ -81,13 +81,13 @@ Five adapter kinds cover essentially every scraping vendor in the wild:
 
 ## Three orchestration modes
 
-- **`ladder`** (default): cheapest first; escalate on failure (status, validation, network error). Stops at first valid response, budget ceiling, or `--max-retries`.
+- **`ladder`** (default): lowest-cost first; escalate on failure (status, validation, network error). Stops at first valid response, budget ceiling, or `--max-retries`.
 - **`race`**: fire all selected routes in parallel; first valid response wins; rest cancelled via `CancelToken`.
 - **`hedge`**: primary at t=0, backups at t = i × `--hedge-delay-ms`. Adaptive delay shrinks when latency variance is bad. First valid wins.
 
 ## Waterfall promotion (learned ordering)
 
-After enough samples for a `(route, domain)` pair, the orchestrator skips the ladder warmup and starts at the proven route directly. Score combines cost / latency (EMA) / reliability (success rate) / confidence (log sample count). Cheapest qualifier wins on ties. Configurable via `WaterfallConfig`. Bounded memory (default cap 1M entries) with automatic stale-entry eviction.
+After enough samples for a `(route, domain)` pair, the orchestrator skips the ladder warmup and starts at the proven route directly. Score combines cost / latency (EMA) / reliability (success rate) / confidence (log sample count). Lowest-cost qualifier wins on ties. Configurable via `WaterfallConfig`. Bounded memory (default cap 1M entries) with automatic stale-entry eviction.
 
 ## CAPTCHA chains
 

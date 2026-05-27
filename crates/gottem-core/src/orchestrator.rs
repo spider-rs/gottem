@@ -25,13 +25,11 @@ pub use spider::utils::hedge::{HedgeConfig, HedgeTracker};
 /// Orchestration mode passed to [`Orchestrator::fetch`].
 #[derive(Debug, Clone, Default)]
 pub enum Mode {
-    /// Sequential lowest-cost first via the supplied [`RetryStrategy`].
+    /// Single route + adaptive hedge after `HedgeTracker::adaptive_delay`.
     #[default]
-    Cheap,
+    Hedge,
     /// Fire `max_parallel` routes at the same tier in parallel; first valid wins.
     Race { max_parallel: usize },
-    /// Single route + adaptive hedge after `HedgeTracker::adaptive_delay`.
-    Hedge,
     /// Ladder: sequential mode, but launch a hedge at tier-N+1 after `hedge_delay`.
     Ladder { hedge_delay: Duration },
     /// Sequential mode capped by an inline budget ceiling.

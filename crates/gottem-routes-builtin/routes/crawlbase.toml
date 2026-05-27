@@ -16,7 +16,7 @@
 
 # ----------------------------------------------------------------------------
 # T4 — Standard Crawling API. Datacenter IPs, no JS render.
-# Cheaper than spider.http at scale; ladder picks spider first by priority.
+# Lower-cost than spider.http at scale; ladder picks spider first by priority.
 # ----------------------------------------------------------------------------
 [[route]]
 id          = "crawlbase.standard"

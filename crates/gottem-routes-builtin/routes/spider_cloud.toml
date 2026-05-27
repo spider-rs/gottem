@@ -8,7 +8,7 @@
 # do NOT route Spider through HttpJson — `.json()` on its response hangs.
 
 # ----------------------------------------------------------------------------
-# T4 — HTTP request mode. Cheapest, no JS render, datacenter IPs.
+# T4 — HTTP request mode. Lowest-cost, no JS render, datacenter IPs.
 # ----------------------------------------------------------------------------
 [[route]]
 id          = "spider.http"

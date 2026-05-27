@@ -13,7 +13,7 @@
 
 ## What is gottem
 
-gottem is one CLI and one Rust library that talks to every major scraping vendor — and your local browser — through a single tiered ladder. You give it a URL; it tries the cheapest way first, escalates when blocked, races vendors when speed matters, and stops when it gets clean content.
+gottem is one CLI and one Rust library that talks to every major scraping vendor — and your local browser — through a single tiered ladder. You give it a URL; it tries the lowest-cost way first, escalates when blocked, races vendors when speed matters, and stops when it gets clean content.
 
 Each "way to fetch" is called a **route**. Routes are described in TOML and matched to one of a small set of **adapters** (plain HTTP, JSON API, streaming JSONL, headless Chrome over CDP, CAPTCHA solver). Adding a new vendor is a TOML row — no code change, no release.
 
@@ -50,13 +50,13 @@ gottem routes show spider.smart
 export FIRECRAWL_API_KEY=fc-...
 export SPIDER_CLOUD_API_KEY=sk-...
 
-# Fetch a URL. gottem starts cheap, escalates if the cheap routes fail.
+# Fetch a URL. gottem starts at the lowest-cost tier, escalates if the basic routes fail.
 gottem fetch https://example.com --show-meta
 
 # Race three routes in parallel — fastest valid response wins.
 gottem fetch https://example.com --mode race --routes firecrawl.scrape,spider.http,zenrows.basic
 
-# Hedge: start cheap, fire a backup at the next tier after a delay.
+# Hedge: start at the lowest tier, fire a backup at the next tier after a delay.
 gottem fetch https://example.com --mode hedge --hedge-delay-ms 2000
 
 # Probe every tier on a target URL — useful for picking a baseline.
@@ -67,7 +67,7 @@ gottem probe https://hard-to-scrape.test
 
 ## The tier ladder
 
-Lower tier = cheaper and faster. Higher tier = handles tougher anti-bot defenses. gottem walks the ladder cheapest-first by default and stops at the first route that returns valid content.
+Lower tier = lower-cost and faster. Higher tier = handles tougher anti-bot defenses. gottem walks the ladder lowest-cost-first by default and stops at the first route that returns valid content.
 
 | Tier | Typical cost | What's at this level                                                       |
 |------|-------------:|----------------------------------------------------------------------------|
@@ -113,7 +113,7 @@ Don't see your vendor? Drop a TOML file in `crates/gottem-routes-builtin/routes/
 
 ### `--mode ladder` (default)
 
-Try cheapest first. If the response fails validation (too short, WAF challenge, 5xx), escalate one tier and try again. Stop at the first valid response, the budget ceiling, or `--max-retries`.
+Try the lowest-cost route first. If the response fails validation (too short, WAF challenge, 5xx), escalate one tier and try again. Stop at the first valid response, the budget ceiling, or `--max-retries`.
 
 Best for: most batch jobs. Cost-optimal.
 
@@ -127,7 +127,7 @@ Best for: latency-critical fetches when budget allows duplicate cost.
 
 Fire route 0 at t=0. If it doesn't return quickly, fire route 1 at t = `--hedge-delay-ms`. Then route 2 at 2× that delay, and so on. First valid wins. The delay shrinks adaptively when latency variance is bad — slow tails get hedged more aggressively automatically.
 
-Best for: high-throughput pipelines where most fetches are cheap but the long tail kills you.
+Best for: high-throughput pipelines where most fetches are low-cost but the long tail kills you.
 
 ---
 
@@ -302,7 +302,7 @@ async fn main() -> anyhow::Result<()> {
         catalog.clone(), Tier::T0, Tier::T9, Capabilities::default(), 5,
     ));
 
-    let resp = orch.fetch_cheap(
+    let resp = orch.fetch(
         ScrapeRequest::get(Url::parse("https://example.com")?),
         strategy,
         CancelToken::new(),

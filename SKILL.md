@@ -1,12 +1,12 @@
 ---
 name: gottem
-description: Use when fetching or scraping the contents of a web page or URL, especially when a plain HTTP request returns a block page, a CAPTCHA, a Cloudflare challenge, an empty shell, or a 403/429 — gottem routes the request through a tiered ladder of scraping vendors (and a local browser), cheapest-first, escalating until it gets clean content. Also use to compare scraping vendors, force a specific provider, or race/hedge providers for latency.
+description: Use when fetching or scraping the contents of a web page or URL, especially when a plain HTTP request returns a block page, a CAPTCHA, a Cloudflare challenge, an empty shell, or a 403/429 — gottem routes the request through a tiered ladder of scraping vendors (and a local browser), lowest-cost-first, escalating until it gets clean content. Also use to compare scraping vendors, force a specific provider, or race/hedge providers for latency.
 ---
 
 # gottem — universal scraper
 
 gottem is one CLI and one Rust library that fetches a URL through a tiered ladder
-of scraping vendors plus a local browser. It tries the cheapest route first,
+of scraping vendors plus a local browser. It tries the lowest-cost route first,
 escalates on failure, and stops when it gets clean content. Adding a vendor is a
 TOML row, not a code change. Powered by [spider](https://github.com/spider-rs/spider).
 
@@ -26,14 +26,14 @@ cargo install gottem-cli      # provides the `gottem` binary
 gottem fetch <URL>
 ```
 
-Default is **ladder** mode: start at the cheapest tier (T0, local/direct), climb
+Default is **ladder** mode: start at the lowest-cost tier (T0, local/direct), climb
 through vendor tiers (T1–T9) only as routes fail or return non-content.
 
 Useful flags:
 
 | Flag | Effect |
 |---|---|
-| `--mode ladder\|race\|hedge` | ladder = cheapest-first sequential; race = all selected routes in parallel, first good wins; hedge = ladder but fire a backup after a delay |
+| `--mode ladder\|race\|hedge` | ladder = lowest-cost-first sequential; race = all selected routes in parallel, first good wins; hedge = ladder but fire a backup after a delay |
 | `--tier-min N --tier-max M` | clamp which ladder tiers are eligible |
 | `--require-js` | skip routes whose adapter can't render JavaScript |
 | `--routes a,b,c` | restrict to specific route ids (required for race mode targeting) |
@@ -48,14 +48,14 @@ gottem fetch https://hard-site.com --require-js --format json
 gottem fetch https://x.com --mode race --routes spider.smart,firecrawl.scrape
 ```
 
-## probe — test reachability cheaply
+## probe — test reachability with low-cost calls
 
 ```sh
 gottem probe <URL> [--tier-min N --tier-max M] [--min-bytes 500]
 ```
 
 Walks tiers reporting which routes succeed, without committing to a full fetch —
-use it to discover the cheapest route that works for a domain.
+use it to discover the lowest-cost route that works for a domain.
 
 ## crawl — multi-page, streaming, never in-memory
 
@@ -137,7 +137,7 @@ gottem --config routes.toml fetch URL  # layer custom vendor routes on top of bu
 - **Adapters** are code — a small fixed set of protocol families: plain HTTP,
   JSON API, streaming JSONL, headless Chrome over CDP, CAPTCHA solver.
 - **Tiers T0–T9** order routes by cost/capability. Ladder mode climbs them;
-  cheap local fetch first, premium unblocking vendors last.
+  low-cost local fetch first, premium unblocking vendors last.
 - On a blocked/empty/challenge response, gottem escalates to the next tier
   automatically rather than returning bad data.
 
