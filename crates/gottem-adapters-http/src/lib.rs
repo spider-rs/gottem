@@ -49,7 +49,7 @@ pub use jsonl_many::HttpJsonlStreamManyAdapter;
 pub use shared::build_default_client;
 
 use shared::{
-    apply_auth, extract_content_and_cost, render_body, send_with_cancel, to_reqwest_method,
+    apply_auth, extract_content_and_cost, render_json_body, send_with_cancel, to_reqwest_method,
     HttpOutcome,
 };
 
@@ -178,7 +178,7 @@ impl Adapter for HttpJsonAdapter {
         }
         builder = apply_auth(builder, &route.auth, req)?;
 
-        if let Some(body) = render_body(&route.body, req)? {
+        if let Some(body) = render_json_body(route, req)? {
             builder = builder.body(body);
         }
 
@@ -245,7 +245,7 @@ impl Adapter for HttpJsonlStreamAdapter {
         }
         builder = apply_auth(builder, &route.auth, req)?;
 
-        if let Some(body) = render_body(&route.body, req)? {
+        if let Some(body) = render_json_body(route, req)? {
             builder = builder.body(body);
         }
 

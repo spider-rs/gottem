@@ -5,7 +5,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use gottem_core::{
     templating, AuthSpec, BodyTemplate, CancelToken, CostExtract, FetchError, HttpMethod,
-    ResponseParse, ScrapeRequest,
+    ResponseParse, Route, ScrapeRequest,
 };
 use reqwest::{Client, Method, RequestBuilder};
 
@@ -101,6 +101,43 @@ pub fn render_body(body: &BodyTemplate, req: &ScrapeRequest) -> Result<Option<By
             "Raw body not yet implemented in gottem-adapters-http".into(),
         )),
     }
+}
+
+/// Render a route's JSON body, then layer the caller's per-vendor
+/// [`provider_options`](ScrapeRequest::provider_options) over it. The vendor
+/// key is the route-id prefix (`"firecrawl.scrape"` → `"firecrawl"`), so only
+/// the bucket for the route that actually runs is applied — a vendor-specific
+/// option never reaches a different vendor when the ladder fails over. The
+/// caller's keys win over the route template's defaults. Empty/non-object
+/// bodies pass through unchanged.
+pub fn render_json_body(route: &Route, req: &ScrapeRequest) -> Result<Option<Bytes>, FetchError> {
+    let Some(bytes) = render_body(&route.body, req)? else {
+        return Ok(None);
+    };
+    if req.provider_options.is_empty() {
+        return Ok(Some(bytes));
+    }
+    let vendor = route.id.split('.').next().unwrap_or(route.id.as_ref());
+    let Some(opts) = req.provider_options.get(vendor) else {
+        return Ok(Some(bytes));
+    };
+    let serde_json::Value::Object(opts) = opts else {
+        return Err(FetchError::Config(format!(
+            "provider_options.{vendor} must be a JSON object"
+        )));
+    };
+    let mut doc: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|e| FetchError::Config(format!("route body is not JSON: {e}")))?;
+    let serde_json::Value::Object(doc_map) = &mut doc else {
+        // Body isn't a JSON object — nothing to merge into; send it as-is.
+        return Ok(Some(bytes));
+    };
+    for (k, v) in opts {
+        doc_map.insert(k.clone(), v.clone());
+    }
+    let merged = serde_json::to_vec(&doc)
+        .map_err(|e| FetchError::Config(format!("re-serialize vendor body: {e}")))?;
+    Ok(Some(Bytes::from(merged)))
 }
 
 /// Parse content **and** extract cost from one response, deserializing the body's JSON

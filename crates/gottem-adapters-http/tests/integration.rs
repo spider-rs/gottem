@@ -15,7 +15,7 @@ use gottem_core::{
     ScrapeRequest, Tier, Validator,
 };
 use url::Url;
-use wiremock::matchers::{body_string, header, method, path};
+use wiremock::matchers::{body_json, body_string, header, method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 fn base_route(server: &MockServer, adapter: AdapterKind, parse: ResponseParse) -> Route {
@@ -141,6 +141,99 @@ async fn http_json_substitutes_url_and_extracts_jsonpath() {
         .unwrap();
     assert_eq!(resp.status, 200);
     assert_eq!(resp.content_str(), Some("# Title"));
+}
+
+#[tokio::test]
+async fn http_json_merges_matching_provider_options_into_body() {
+    let server = MockServer::start().await;
+    let target = "https://example.com/page";
+
+    // The route ships {"url", "formats":["markdown"]}; the caller's firecrawl
+    // bucket adds `onlyMainContent` and overrides `formats`. Caller keys win.
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_json(serde_json::json!({
+            "url": target,
+            "formats": ["html"],
+            "onlyMainContent": true,
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data":{"markdown":"# Title"}})),
+        )
+        .mount(&server)
+        .await;
+
+    let adapter = HttpJsonAdapter::new(build_default_client());
+    let mut route = base_route(
+        &server,
+        AdapterKind::HttpJson,
+        ResponseParse::JsonPath {
+            path: "$.data.markdown".into(),
+        },
+    );
+    route.id = Arc::from("firecrawl.scrape");
+    route.method = HttpMethod::Post;
+    route.body = BodyTemplate::Json {
+        template: r#"{"url":"{{url}}","formats":["markdown"]}"#.into(),
+    };
+    let req = ScrapeRequest::get(Url::parse(target).unwrap()).with_provider_options(
+        std::collections::HashMap::from([(
+            "firecrawl".to_string(),
+            serde_json::json!({ "onlyMainContent": true, "formats": ["html"] }),
+        )]),
+    );
+    let resp = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
+        .await
+        .unwrap();
+    assert_eq!(resp.status, 200);
+}
+
+#[tokio::test]
+async fn http_json_ignores_provider_options_for_a_different_vendor() {
+    let server = MockServer::start().await;
+    let target = "https://example.com/page";
+
+    // The route is firecrawl; the only bucket is for zenrows, so the body must
+    // go out untouched — a vendor's option never leaks to another vendor.
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_json(serde_json::json!({
+            "url": target,
+            "formats": ["markdown"],
+        })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"data":{"markdown":"# Title"}})),
+        )
+        .mount(&server)
+        .await;
+
+    let adapter = HttpJsonAdapter::new(build_default_client());
+    let mut route = base_route(
+        &server,
+        AdapterKind::HttpJson,
+        ResponseParse::JsonPath {
+            path: "$.data.markdown".into(),
+        },
+    );
+    route.id = Arc::from("firecrawl.scrape");
+    route.method = HttpMethod::Post;
+    route.body = BodyTemplate::Json {
+        template: r#"{"url":"{{url}}","formats":["markdown"]}"#.into(),
+    };
+    let req = ScrapeRequest::get(Url::parse(target).unwrap()).with_provider_options(
+        std::collections::HashMap::from([(
+            "zenrows".to_string(),
+            serde_json::json!({ "js_render": true }),
+        )]),
+    );
+    let resp = adapter
+        .execute(&route, &req, &AdapterContext::new(0), &CancelToken::new())
+        .await
+        .unwrap();
+    assert_eq!(resp.status, 200);
 }
 
 #[tokio::test]

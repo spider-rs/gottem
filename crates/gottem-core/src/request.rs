@@ -48,6 +48,14 @@ pub struct ScrapeRequest {
     pub required_caps: Capabilities,
     /// Free-form per-request hints passed through to adapters (e.g. chrome args).
     pub extra: HashMap<String, serde_json::Value>,
+    /// Per-vendor passthrough options merged verbatim into the outbound vendor
+    /// request body. Keyed by vendor (the route-id prefix, e.g. `"firecrawl"`);
+    /// each value is a JSON object whose keys are layered over the route's
+    /// rendered JSON body, letting callers set a vendor's native API options
+    /// without a per-route template change. Only the bucket matching the route
+    /// that actually runs is applied, so a vendor-specific option never leaks
+    /// to a different vendor when the ladder fails over.
+    pub provider_options: HashMap<String, serde_json::Value>,
     /// Per-request credential overrides keyed by env-var name (e.g.
     /// `"SPIDER_API_KEY" → "sk-..."`). When an adapter resolves an
     /// [`crate::AuthSpec`] env var or a `{{env:NAME}}` template, it consults
@@ -82,6 +90,7 @@ impl ScrapeRequest {
             geo: None,
             required_caps: Capabilities::default(),
             extra: HashMap::new(),
+            provider_options: HashMap::new(),
             credentials: HashMap::new(),
             formats: HashSet::new(),
             return_links: false,
@@ -119,6 +128,13 @@ impl ScrapeRequest {
     /// `self` so it composes with the other `with_*` builders.
     pub fn with_credentials(mut self, creds: HashMap<String, String>) -> Self {
         self.credentials = creds;
+        self
+    }
+
+    /// Builder-style: attach per-vendor passthrough options. See
+    /// [`provider_options`](ScrapeRequest::provider_options).
+    pub fn with_provider_options(mut self, opts: HashMap<String, serde_json::Value>) -> Self {
+        self.provider_options = opts;
         self
     }
 
