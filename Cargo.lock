@@ -3332,7 +3332,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-adapters-http"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3386,7 +3386,7 @@ dependencies = [
 
 [[package]]
 name = "gottem-core"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "async-trait",
  "bytes",
