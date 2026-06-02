@@ -17,7 +17,13 @@ gottem-core  = { path = "../gottem-core", version = "0.1.16" }
 # feature flags and the type path in code is the canonical one. Same
 # underlying build either way; spider's chrome feature also resolves to
 # `chromey`, so there's no duplicate chromium-protocol compile.
-chromey      = "2"
+#
+# `chrome_tls_connection` enables tokio-tungstenite's native-tls so chromey can
+# open `wss://` CDP endpoints (Kernel's per-session cdp_ws_url, Brightdata,
+# Browserless are all wss). Without it the connect fails with
+# `Ws(Url(TlsFeatureNotEnabled))`. Cargo unifies chromey's features across the
+# build, so this also covers spider::Website's remote-connection path.
+chromey      = { version = "2", features = ["chrome_tls_connection"] }
 spider       = { workspace = true, features = ["basic", "chrome"] }
 async-trait  = { workspace = true }
 bytes        = { workspace = true }
