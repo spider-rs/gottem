@@ -385,8 +385,13 @@ impl Adapter for KernelCdpAdapter {
         // the session's CDP ws url. Stealth + fingerprint are OFF on purpose —
         // Kernel already ships a managed anti-detect browser, so layering
         // spider's own spoofing on top produces inconsistent signals that leak.
-        let driven = scrape_via_spider(&session.cdp_ws_url, req.url.as_str(), route.timeout(), cancel)
-            .await;
+        let driven = scrape_via_spider(
+            &session.cdp_ws_url,
+            req.url.as_str(),
+            route.timeout(),
+            cancel,
+        )
+        .await;
 
         // ---- 3. On success, read Kernel's own usage meter for actual-cost
         // billing *before* releasing (uptime is unreadable after the session is
@@ -533,7 +538,11 @@ async fn fetch_kernel_cost_dollars(
     session: &KernelSession,
     api_key: &str,
 ) -> Option<f64> {
-    let url = format!("{}/{}", create_url.trim_end_matches('/'), session.session_id);
+    let url = format!(
+        "{}/{}",
+        create_url.trim_end_matches('/'),
+        session.session_id
+    );
     let resp = tokio::time::timeout(
         Duration::from_secs(10),
         http.get(&url).bearer_auth(api_key).send(),
