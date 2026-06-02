@@ -12,9 +12,9 @@
 //!
 //! [`KernelCdpAdapter`] covers Kernel ([onkernel.com](https://kernel.sh)), which
 //! has no *static* endpoint: it `POST`s `/browsers` to mint a per-session
-//! `cdp_ws_url`, drives it through [`spider::Website`] (stealth + fingerprint
-//! off, since Kernel is already a managed anti-detect browser), then `DELETE`s
-//! the session (Kernel bills per running second). It reports
+//! `cdp_ws_url`, drives it (via `spider::Website` by default, or raw chromey
+//! [`drive_cdp`] when `provider_options.kernel.spider_disabled` is set), then
+//! `DELETE`s the session (Kernel bills per running second). It reports
 //! [`AdapterKind::Custom`]`("kernel_cdp")`.
 //!
 //! ## CDP via chromey
@@ -282,10 +282,14 @@ const KERNEL_DEFAULT_CREATE_URL: &str = "https://api.onkernel.com/browsers";
 
 /// Adapter for Kernel ([onkernel.com](https://kernel.sh)). Kernel has no static
 /// CDP endpoint: each scrape first `POST`s `/browsers` to mint a per-session
-/// `cdp_ws_url`, drives it through [`spider::Website`] pointed at that ws url
-/// (stealth + fingerprint OFF — see [`scrape_via_spider`]), then `DELETE`s the
-/// session — Kernel bills per *running* second, so releasing promptly is a cost
-/// guarantee, not just hygiene.
+/// `cdp_ws_url`, drives it, then `DELETE`s the session — Kernel bills per
+/// *running* second, so releasing promptly is a cost guarantee, not just hygiene.
+///
+/// Two drivers, switchable per request:
+/// - **default** — [`spider::Website`] via [`scrape_via_spider`]: crawl() +
+///   subscription (streams pages to the user), stealth/fingerprint off.
+/// - **`provider_options.kernel.spider_disabled = true`** — raw chromey
+///   ([`drive_cdp`]): direct CDP, more control for bespoke automation.
 ///
 /// Browser config is tunable per request via `provider_options.kernel` (e.g.
 /// `{ "headless": false, "gpu": true, "proxy_id": "...", "viewport": {...} }`),
@@ -305,6 +309,8 @@ const KERNEL_DEFAULT_CREATE_URL: &str = "https://api.onkernel.com/browsers";
 pub struct KernelCdpAdapter {
     /// Shared client for the create/uptime/delete REST calls (connection pooling).
     http: reqwest::Client,
+    /// Bound on the chromey WebSocket connect after the session is minted.
+    connect_timeout: Duration,
 }
 
 impl Default for KernelCdpAdapter {
@@ -317,12 +323,23 @@ impl KernelCdpAdapter {
     pub fn new() -> Self {
         Self {
             http: reqwest::Client::new(),
+            // Kernel cold-starts a sandboxed browser; the WS is live by the time
+            // create returns, but give the CDP handshake generous headroom.
+            connect_timeout: Duration::from_secs(20),
         }
     }
 
     /// Reuse a pre-configured client (e.g. the app's shared pooled client).
     pub fn with_client(http: reqwest::Client) -> Self {
-        Self { http }
+        Self {
+            http,
+            connect_timeout: Duration::from_secs(20),
+        }
+    }
+
+    pub fn with_connect_timeout(mut self, t: Duration) -> Self {
+        self.connect_timeout = t;
+        self
     }
 
     pub fn arc() -> Arc<dyn Adapter> {
@@ -380,18 +397,23 @@ impl Adapter for KernelCdpAdapter {
         )
         .await?;
 
-        // ---- 2. Drive the remote browser through spider's Website ----------
-        // Same chromey/chromiumoxide engine gottem uses everywhere, pointed at
-        // the session's CDP ws url. Stealth + fingerprint are OFF on purpose —
-        // Kernel already ships a managed anti-detect browser, so layering
-        // spider's own spoofing on top produces inconsistent signals that leak.
-        let driven = scrape_via_spider(
-            &session.cdp_ws_url,
-            req.url.as_str(),
-            route.timeout(),
-            cancel,
-        )
-        .await;
+        // ---- 2. Drive the remote browser. Default path is spider::Website —
+        // its crawl() + subscription is how rendered pages stream back, and it
+        // carries the quality steps. Opt out per request with
+        // `provider_options.kernel.spider_disabled = true` to drive raw chromey
+        // directly (more control for bespoke automation; no spider wrapper).
+        let driven = if kernel_spider_disabled(req) {
+            drive_cdp(
+                &session.cdp_ws_url,
+                req.url.as_str(),
+                self.connect_timeout,
+                route.timeout(),
+                cancel,
+            )
+            .await
+        } else {
+            scrape_via_spider(&session.cdp_ws_url, req.url.as_str(), route.timeout(), cancel).await
+        };
 
         // ---- 3. On success, read Kernel's own usage meter for actual-cost
         // billing *before* releasing (uptime is unreadable after the session is
@@ -455,19 +477,38 @@ fn kernel_cost_dollars(uptime_ms: u64, headless: bool, gpu: bool) -> f64 {
     (uptime_ms as f64 / 1000.0) * rate_per_sec
 }
 
+/// Keys the adapter consumes from `provider_options.kernel` as its own control
+/// flags — they must NOT be forwarded to Kernel's create-browser API.
+const KERNEL_CONTROL_KEYS: &[&str] = &["spider_disabled"];
+
 /// Default create body (cheap + stealthy), with `provider_options.kernel`
 /// layered over the top so callers can flip `headless`, request `gpu`, pin a
 /// `proxy_id`, set a `viewport`, raise `timeout_seconds`, etc. Caller keys win.
+/// Adapter-control flags ([`KERNEL_CONTROL_KEYS`]) are stripped so they never
+/// reach Kernel's API.
 fn build_kernel_create_body(req: &ScrapeRequest) -> serde_json::Value {
     let mut body = serde_json::json!({ "headless": true, "stealth": true });
     if let (Some(serde_json::Value::Object(opts)), serde_json::Value::Object(base)) =
         (req.provider_options.get("kernel"), &mut body)
     {
         for (k, v) in opts {
+            if KERNEL_CONTROL_KEYS.contains(&k.as_str()) {
+                continue;
+            }
             base.insert(k.clone(), v.clone());
         }
     }
     body
+}
+
+/// Whether this request opted out of the spider driver (`provider_options.kernel
+/// .spider_disabled = true`) to drive raw chromey directly instead.
+fn kernel_spider_disabled(req: &ScrapeRequest) -> bool {
+    req.provider_options
+        .get("kernel")
+        .and_then(|o| o.get("spider_disabled"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
 }
 
 /// `POST {create_url}` with `Authorization: Bearer <api_key>` → parse the
@@ -586,20 +627,22 @@ async fn delete_kernel_browser(
     let _ = tokio::time::timeout(Duration::from_secs(10), fut).await;
 }
 
-/// Scrape `target_url` through `spider::Website`, connected to Kernel's remote
-/// browser via its CDP ws url. This is "our chromey via spider" — the same
-/// engine the rest of gottem rides on, just pointed at a remote endpoint.
+/// Default Kernel driver: scrape `target_url` through `spider::Website`,
+/// connected to Kernel's remote browser via its CDP ws url. The same engine the
+/// rest of gottem rides on, just pointed at a remote endpoint.
+///
+/// Driven with `crawl()` (renders via the remote browser — the "good data"),
+/// which streams pages over a broadcast **subscription** rather than retaining
+/// them — the same channel mechanism gottem uses to send pages to the user — so
+/// we subscribe before crawling and collect after.
 ///
 /// `with_stealth(false)` + `with_fingerprint(false)` are deliberate: Kernel
 /// provisions a managed anti-detect browser server-side, so spider must NOT
 /// inject its own stealth/fingerprint patches — double-spoofing produces
-/// internally inconsistent signals (a faked UA over the real GPU/fonts, etc.)
-/// that are *easier* to detect than either layer alone. `with_limit(1)` keeps
-/// it to the single target page (no link-following).
+/// internally inconsistent signals that are *easier* to detect. `with_limit(1)`
+/// is the guardrail that keeps a chrome crawl from walking the whole site.
 ///
-/// Bounded by the route timeout AND the cancel token; on either, the Website is
-/// dropped, which closes the CDP connection (the Kernel session itself is torn
-/// down separately by the caller's DELETE).
+/// Bounded by the route timeout AND the cancel token.
 async fn scrape_via_spider(
     cdp_ws_url: &str,
     target_url: &str,
@@ -616,24 +659,34 @@ async fn scrape_via_spider(
         .build()
         .map_err(|_| FetchError::Config("spider website build failed (invalid url?)".into()))?;
 
+    // Subscribe before crawling: crawl() emits pages on this broadcast channel
+    // rather than retaining them.
+    let mut rx = website.subscribe(16);
+
     tokio::time::timeout(route_timeout, async {
         tokio::select! {
             biased;
             _ = cancel.cancelled() => Err(FetchError::Cancelled),
-            _ = website.scrape() => Ok(()),
+            _ = website.crawl() => Ok(()),
         }
     })
     .await
     .map_err(|_| FetchError::Timeout(route_timeout))??;
 
-    let page = website
-        .get_pages()
-        .and_then(|pages| pages.first())
-        .ok_or_else(|| FetchError::Parse("spider returned no page".into()))?;
+    // Take the last page the crawl emitted (≤1 under with_limit(1)).
+    let mut page = None;
+    loop {
+        match rx.try_recv() {
+            Ok(p) => page = Some(p),
+            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => continue,
+            Err(_) => break,
+        }
+    }
+    let page = page.ok_or_else(|| FetchError::Parse("spider crawl returned no page".into()))?;
     let status = page.status_code.as_u16();
     let html = page.get_html();
     if html.is_empty() {
-        return Err(FetchError::Parse("spider page returned empty html".into()));
+        return Err(FetchError::Parse("spider crawl returned empty html".into()));
     }
     Ok((status, html))
 }
@@ -743,6 +796,32 @@ mod tests {
         assert_eq!(body["headless"], serde_json::json!(false)); // caller wins
         assert_eq!(body["gpu"], serde_json::json!(true));
         assert_eq!(body["stealth"], serde_json::json!(true)); // untouched default kept
+    }
+
+    #[test]
+    fn kernel_control_flag_not_forwarded_to_create_body() {
+        let mut req = ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
+        req.provider_options.insert(
+            "kernel".to_string(),
+            serde_json::json!({ "spider_disabled": true, "headless": false }),
+        );
+        let body = build_kernel_create_body(&req);
+        assert_eq!(body["headless"], serde_json::json!(false)); // real Kernel field passes
+        assert!(body.get("spider_disabled").is_none()); // control flag stripped
+    }
+
+    #[test]
+    fn kernel_spider_disabled_reads_flag() {
+        let base = || ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
+        assert!(!kernel_spider_disabled(&base())); // absent → spider (default)
+        let mut on = base();
+        on.provider_options
+            .insert("kernel".into(), serde_json::json!({ "spider_disabled": true }));
+        assert!(kernel_spider_disabled(&on));
+        let mut off = base();
+        off.provider_options
+            .insert("kernel".into(), serde_json::json!({ "spider_disabled": false }));
+        assert!(!kernel_spider_disabled(&off));
     }
 
     #[test]
