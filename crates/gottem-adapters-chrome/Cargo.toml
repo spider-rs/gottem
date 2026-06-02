@@ -24,7 +24,10 @@ gottem-core  = { path = "../gottem-core", version = "0.1.16" }
 # `Ws(Url(TlsFeatureNotEnabled))`. Cargo unifies chromey's features across the
 # build, so this also covers spider::Website's remote-connection path.
 chromey      = { version = "2", features = ["chrome_tls_connection"] }
-spider       = { workspace = true, features = ["basic", "chrome"] }
+# `chrome_intercept` sets up the CDP Network/Fetch domain spider uses to detect
+# page completion; without it a remote-browser crawl waits on the full
+# request_timeout. Matches spider's own remote-chrome examples.
+spider       = { workspace = true, features = ["basic", "chrome", "chrome_intercept"] }
 async-trait  = { workspace = true }
 bytes        = { workspace = true }
 url          = { workspace = true }
