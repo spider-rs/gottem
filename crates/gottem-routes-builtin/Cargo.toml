@@ -31,12 +31,13 @@ browser-use        = []
 crawlbase          = []
 diffbot            = []
 dataforseo         = []
+kernel             = []
 all = [
     "spider-cloud", "firecrawl", "brightdata", "zyte", "zenrows", "scrapingbee",
     "brightdata-browser", "browserless", "spider-browser",
     "apify", "oxylabs", "two-captcha",
     "browserbase", "browser-use",
-    "crawlbase", "diffbot", "dataforseo",
+    "crawlbase", "diffbot", "dataforseo", "kernel",
 ]
 
 [lints.rust]

@@ -186,6 +186,9 @@ fn register_all_succeeds_with_default_features() {
     if cfg!(feature = "dataforseo") {
         expected += 1;
     }
+    if cfg!(feature = "kernel") {
+        expected += 1;
+    }
 
     assert_eq!(catalog.len(), expected, "route count mismatch");
 }
@@ -224,6 +227,31 @@ fn browserbase_and_browser_use_load_at_t9() {
         AuthSpec::Bearer { env } => assert_eq!(env, "BROWSER_USE_API_KEY"),
         other => panic!("expected Bearer for browser-use, got {other:?}"),
     }
+}
+
+#[cfg(feature = "kernel")]
+#[test]
+fn kernel_loads_at_t8_with_custom_adapter_and_bearer_auth() {
+    use gottem_core::{AdapterKind, AuthSpec};
+    let catalog = gottem_routes_builtin::add_kernel(RouteCatalogBuilder::new())
+        .expect("kernel.toml parses")
+        .build();
+    assert_eq!(catalog.len(), 1);
+    let r = catalog.get("kernel.cdp").unwrap();
+    assert_eq!(r.tier, Tier::T8);
+    // Dispatches to the gottem-adapters-chrome KernelCdpAdapter (Custom kind),
+    // not the static-endpoint ChromeCdp adapter.
+    match &r.adapter {
+        AdapterKind::Custom(name) => assert_eq!(name.as_ref(), "kernel_cdp"),
+        other => panic!("expected Custom(kernel_cdp), got {other:?}"),
+    }
+    match &r.auth {
+        AuthSpec::Bearer { env } => assert_eq!(env, "KERNEL_API_KEY"),
+        other => panic!("expected Bearer auth for Kernel, got {other:?}"),
+    }
+    // Create endpoint is the REST mint URL, not a wss:// connect string.
+    assert!(r.endpoint.as_str().starts_with("https://api.onkernel.com"));
+    assert!(r.caps.js && r.caps.stealth);
 }
 
 #[cfg(feature = "two-captcha")]

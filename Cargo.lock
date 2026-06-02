@@ -3325,6 +3325,8 @@ dependencies = [
  "chromey",
  "futures-util",
  "gottem-core",
+ "reqwest 0.13.3",
+ "serde_json",
  "spider",
  "tokio",
  "url",

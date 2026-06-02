@@ -114,6 +114,10 @@ pub fn register_all(builder: RouteCatalogBuilder) -> Result<RouteCatalogBuilder,
     {
         b = add_dataforseo(b)?;
     }
+    #[cfg(feature = "kernel")]
+    {
+        b = add_kernel(b)?;
+    }
     // `local.crawl` is always loaded — it's the fallback engine for
     // `CrawlEngine::Local` / `CrawlEngine::Auto`. Cost 0, depends on no
     // external vendor; only matters if the caller installs the
@@ -258,6 +262,16 @@ pub fn add_dataforseo(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, Fet
     b.add_toml(include_str!("../routes/dataforseo.toml"))
 }
 
+/// Kernel (onkernel.com) — cloud Chromium over CDP. One route at T8. Needs the
+/// `kernel_cdp` adapter (gottem-adapters-chrome) registered, which mints a
+/// per-session browser via `POST /browsers`, drives it with chromey, then
+/// releases it. Browser config is tunable via `provider_options.kernel`.
+/// Requires env var `KERNEL_API_KEY`.
+#[cfg(feature = "kernel")]
+pub fn add_kernel(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
+    b.add_toml(include_str!("../routes/kernel.toml"))
+}
+
 /// Raw access to the embedded TOML strings. Useful for displaying the shipped catalog
 /// in CLI output (e.g. `gottem routes show <vendor>`) or for tests.
 pub mod embedded {
@@ -295,4 +309,6 @@ pub mod embedded {
     pub const DIFFBOT: &str = include_str!("../routes/diffbot.toml");
     #[cfg(feature = "dataforseo")]
     pub const DATAFORSEO: &str = include_str!("../routes/dataforseo.toml");
+    #[cfg(feature = "kernel")]
+    pub const KERNEL: &str = include_str!("../routes/kernel.toml");
 }

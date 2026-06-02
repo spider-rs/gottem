@@ -24,6 +24,13 @@ bytes        = { workspace = true }
 url          = { workspace = true }
 tokio        = { workspace = true, features = ["rt", "sync", "time", "macros"] }
 futures-util = { workspace = true }
+# Kernel (onkernel.com) needs a REST round-trip to mint a per-session CDP
+# endpoint before the chromey connect — reqwest for create/delete, serde_json
+# to parse the session response. `rustls` + `http2` mirror the sibling adapter
+# crates so cargo unifies one reqwest build (workspace reqwest is
+# default-features = false, so TLS must be opted in explicitly).
+reqwest      = { workspace = true, features = ["json", "rustls", "http2"] }
+serde_json   = { workspace = true }
 
 [features]
 default = []

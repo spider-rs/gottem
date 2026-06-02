@@ -1,0 +1,44 @@
+# Kernel (onkernel.com) — cloud Chromium driven over CDP by gottem's chromey
+# engine, i.e. "our chromey via spider" pointed at a remote browser.
+#
+# Unlike the other chrome_cdp vendors, Kernel has NO static wss endpoint: the
+# `kernel_cdp` adapter POSTs this endpoint to mint a per-session `cdp_ws_url`,
+# drives it, then DELETEs the session (Kernel bills per *running* second).
+#
+# Env var: KERNEL_API_KEY
+# Create:  POST https://api.onkernel.com/browsers   (Authorization: Bearer)
+# Browser config is tunable per request via provider_options:
+#   { "provider_options": { "kernel": { "headless": false, "gpu": true,
+#       "proxy_id": "...", "viewport": { "width": 1920, "height": 1080 } } } }
+# Defaults are headless + stealth (the cheap, anti-bot-friendly tier).
+#
+# Pricing (https://www.kernel.sh/docs/info/pricing) is purely time-based:
+#   headless $0.0000166667/s · headful $0.0001333336/s · +GPU $0.0008/s.
+# The kernel_cdp adapter bills ACTUAL cost: it reads Kernel's own
+# `usage.uptime_ms` meter (GET /browsers/{id}) after the scrape and reports it
+# in dollars. `cost` below is only the fallback ESTIMATE used when that meter
+# read fails ($0.01/page baseline, matching the other T8 browser routes — also
+# keeps the tier-cost ordering invariant). See COST_ACCURACY.md.
+# Docs: https://kernel.sh/docs
+
+[[route]]
+id          = "kernel.cdp"
+adapter     = "kernel_cdp"
+endpoint    = "https://api.onkernel.com/browsers"
+method      = "GET"
+tier        = 8
+cost        = 100
+timeout_ms  = 90000
+concurrency = 5
+
+[route.auth]
+kind = "bearer"
+env  = "KERNEL_API_KEY"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js      = true
+stealth = true
