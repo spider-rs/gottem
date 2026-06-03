@@ -280,6 +280,49 @@ pub const KERNEL_ADAPTER_ID: &str = "kernel_cdp";
 /// adapter that owns the default).
 const KERNEL_DEFAULT_CREATE_URL: &str = "https://api.onkernel.com/browsers";
 
+/// Per-second USD pricing for Kernel's session modes. Used to turn the metered
+/// `uptime_ms` into an actual-cost figure. Supplied by the host — this crate
+/// ships no rates of its own.
+#[derive(Debug, Clone, Copy)]
+pub struct KernelRates {
+    pub headless_per_sec: f64,
+    pub headful_per_sec: f64,
+    pub gpu_per_sec: f64,
+}
+
+/// Host-supplied policy for the Kernel adapter. The tuned defaults, driver
+/// choice, and pricing live with the host (e.g. the gottem-cloud backend), so
+/// they stay configurable and out of this public crate. The [`Default`] here is
+/// deliberately neutral — lean chromey, a minimal create body, spider's own
+/// stealth/fingerprint behavior, and NO pricing.
+#[derive(Debug, Clone)]
+pub struct KernelConfig {
+    /// Driver used when the request doesn't set `provider_options.kernel.spider`.
+    /// `true` = spider::Website, `false` = raw chromey.
+    pub default_use_spider: bool,
+    /// Base create-browser body (a JSON object) before per-request
+    /// `provider_options.kernel` overrides are layered on.
+    pub create_defaults: serde_json::Value,
+    /// spider::Website stealth / fingerprint toggles for the spider driver.
+    pub spider_stealth: bool,
+    pub spider_fingerprint: bool,
+    /// Per-second pricing. `None` skips the usage meter entirely — no actual
+    /// cost is reported and the host falls back to the route's static estimate.
+    pub rates: Option<KernelRates>,
+}
+
+impl Default for KernelConfig {
+    fn default() -> Self {
+        Self {
+            default_use_spider: false,
+            create_defaults: serde_json::json!({ "headless": true }),
+            spider_stealth: true,
+            spider_fingerprint: true,
+            rates: None,
+        }
+    }
+}
+
 /// Adapter for Kernel ([onkernel.com](https://kernel.sh)). Kernel has no static
 /// CDP endpoint: each scrape first `POST`s `/browsers` to mint a per-session
 /// `cdp_ws_url`, drives it, then `DELETE`s the session — Kernel bills per
@@ -293,15 +336,21 @@ const KERNEL_DEFAULT_CREATE_URL: &str = "https://api.onkernel.com/browsers";
 /// - **`provider_options.kernel.spider = false`** — raw chromey
 ///   ([`drive_cdp`]): direct CDP, lean; survives a 1 vCPU task.
 ///
-/// Browser config is tunable per request via `provider_options.kernel` (e.g.
-/// `{ "headless": false, "gpu": true, "proxy_id": "...", "viewport": {...} }`),
-/// layered over the adapter's cheap defaults (`headless` + `stealth`).
+/// Policy — driver default, create-browser defaults, spider stealth/fingerprint,
+/// and pricing — is supplied by the host via [`KernelConfig`] (see
+/// [`with_config`]). The OSS default is neutral; the gottem-cloud backend passes
+/// its tuned config so those values stay configurable and out of this crate.
+/// Per request, `provider_options.kernel` overrides the create body and the
+/// `spider` driver flag.
 ///
-/// Billing is **actual, not estimated**: on success the adapter reads Kernel's
-/// own `usage.uptime_ms` meter (`GET /browsers/{id}`) before releasing, prices
-/// it at the session's per-second rate, and reports it as `cost_actual_unit =
-/// "dollars"`. If the meter read fails the response carries no actual cost and
-/// the cloud falls back to the route's static `cost_milli` estimate.
+/// Billing is **actual, not estimated** *when the host configures rates*: on
+/// success the adapter reads Kernel's own `usage.uptime_ms` meter
+/// (`GET /browsers/{id}`) before releasing, prices it at the session's
+/// per-second rate, and reports it as `cost_actual_unit = "dollars"`. No rates
+/// (or a meter miss) → no actual cost, and the host falls back to the route's
+/// static `cost_milli` estimate.
+///
+/// [`with_config`]: KernelCdpAdapter::with_config
 ///
 /// The route reports `adapter = "kernel_cdp"`; this adapter's [`kind`] returns
 /// the matching [`AdapterKind::Custom`] so the registry dispatches to it.
@@ -313,6 +362,8 @@ pub struct KernelCdpAdapter {
     http: reqwest::Client,
     /// Bound on the chromey WebSocket connect after the session is minted.
     connect_timeout: Duration,
+    /// Host-supplied policy (driver default, create defaults, pricing).
+    config: KernelConfig,
 }
 
 impl Default for KernelCdpAdapter {
@@ -323,19 +374,23 @@ impl Default for KernelCdpAdapter {
 
 impl KernelCdpAdapter {
     pub fn new() -> Self {
-        Self {
-            http: reqwest::Client::new(),
-            // Kernel cold-starts a sandboxed browser; the WS is live by the time
-            // create returns, but give the CDP handshake generous headroom.
-            connect_timeout: Duration::from_secs(20),
-        }
+        Self::with_config(reqwest::Client::new(), KernelConfig::default())
     }
 
     /// Reuse a pre-configured client (e.g. the app's shared pooled client).
     pub fn with_client(http: reqwest::Client) -> Self {
+        Self::with_config(http, KernelConfig::default())
+    }
+
+    /// Build with host-supplied policy. The gottem-cloud backend passes its
+    /// tuned defaults + pricing here so they stay out of this public crate.
+    pub fn with_config(http: reqwest::Client, config: KernelConfig) -> Self {
         Self {
             http,
+            // Kernel cold-starts a sandboxed browser; the WS is live by the time
+            // create returns, but give the CDP handshake generous headroom.
             connect_timeout: Duration::from_secs(20),
+            config,
         }
     }
 
@@ -352,6 +407,11 @@ impl KernelCdpAdapter {
     /// matches the `arc_with_client` convention of the other REST adapters.
     pub fn arc_with_client(http: reqwest::Client) -> Arc<dyn Adapter> {
         Arc::new(Self::with_client(http))
+    }
+
+    /// `arc_with_client` + host policy. This is what gottem-cloud uses.
+    pub fn arc_with_config(http: reqwest::Client, config: KernelConfig) -> Arc<dyn Adapter> {
+        Arc::new(Self::with_config(http, config))
     }
 }
 
@@ -386,7 +446,7 @@ impl Adapter for KernelCdpAdapter {
             Ok(u) => u.to_string(),
             Err(_) => KERNEL_DEFAULT_CREATE_URL.to_string(),
         };
-        let create_body = build_kernel_create_body(req);
+        let create_body = build_kernel_create_body(req, &self.config.create_defaults);
 
         // ---- 1. Mint a browser session (cancel + timeout bounded) ----------
         let session = create_kernel_browser(
@@ -399,12 +459,19 @@ impl Adapter for KernelCdpAdapter {
         )
         .await?;
 
-        // ---- 2. Drive the remote browser. Default is spider::Website (crawl()
-        // + subscription, quality steps; faster on ≥2 vCPU). Opt into raw
-        // chromey ([`drive_cdp`], direct CDP) per request with
-        // `provider_options.kernel.spider = false`.
-        let driven = if kernel_use_spider(req) {
-            scrape_via_spider(&session.cdp_ws_url, req.url.as_str(), route.timeout(), cancel).await
+        // ---- 2. Drive the remote browser. Driver default + spider tuning come
+        // from host config; the request can override via
+        // `provider_options.kernel.spider`.
+        let driven = if kernel_use_spider(req, self.config.default_use_spider) {
+            scrape_via_spider(
+                &session.cdp_ws_url,
+                req.url.as_str(),
+                self.config.spider_stealth,
+                self.config.spider_fingerprint,
+                route.timeout(),
+                cancel,
+            )
+            .await
         } else {
             drive_cdp(
                 &session.cdp_ws_url,
@@ -416,14 +483,13 @@ impl Adapter for KernelCdpAdapter {
             .await
         };
 
-        // ---- 3. On success, read Kernel's own usage meter for actual-cost
-        // billing *before* releasing (uptime is unreadable after the session is
-        // deleted). On failure we skip it — the error path bills the min-charge
-        // floor, not vendor cost. Best-effort: a meter miss falls back to the
-        // route's static `cost_milli` estimate.
-        let cost_dollars = match &driven {
-            Ok((status, _)) if *status < 400 => {
-                fetch_kernel_cost_dollars(&self.http, &create_url, &session, &api_key).await
+        // ---- 3. On success — and only if the host configured pricing — read
+        // Kernel's own usage meter for actual-cost billing *before* releasing
+        // (uptime is unreadable after the session is deleted). No rates → no
+        // meter read; the host falls back to the route's static estimate.
+        let cost_dollars = match (&driven, self.config.rates) {
+            (Ok((status, _)), Some(rates)) if *status < 400 => {
+                fetch_kernel_cost_dollars(&self.http, &create_url, &session, &api_key, &rates).await
             }
             _ => None,
         };
@@ -458,22 +524,16 @@ struct KernelSession {
     gpu: bool,
 }
 
-// Kernel per-second rates (https://www.kernel.sh/docs/info/pricing). Time-based
-// billing: cost = uptime_seconds × rate. GPU is headful-only and dominates.
-const KERNEL_RATE_HEADLESS_PER_SEC: f64 = 0.000_016_666_7;
-const KERNEL_RATE_HEADFUL_PER_SEC: f64 = 0.000_133_333_6;
-const KERNEL_RATE_GPU_PER_SEC: f64 = 0.000_800_001_6;
-
-/// Dollar cost of a Kernel session from its metered `uptime_ms` and mode. Pure
-/// so the rate selection is unit-testable. GPU (headful-only) wins, then
-/// headless vs headful.
-fn kernel_cost_dollars(uptime_ms: u64, headless: bool, gpu: bool) -> f64 {
+/// Dollar cost of a Kernel session from its metered `uptime_ms`, mode, and the
+/// host-supplied [`KernelRates`]. Pure so the rate selection is unit-testable.
+/// GPU (headful-only) wins, then headless vs headful.
+fn kernel_cost_dollars(uptime_ms: u64, headless: bool, gpu: bool, rates: &KernelRates) -> f64 {
     let rate_per_sec = if gpu {
-        KERNEL_RATE_GPU_PER_SEC
+        rates.gpu_per_sec
     } else if headless {
-        KERNEL_RATE_HEADLESS_PER_SEC
+        rates.headless_per_sec
     } else {
-        KERNEL_RATE_HEADFUL_PER_SEC
+        rates.headful_per_sec
     };
     (uptime_ms as f64 / 1000.0) * rate_per_sec
 }
@@ -482,13 +542,13 @@ fn kernel_cost_dollars(uptime_ms: u64, headless: bool, gpu: bool) -> f64 {
 /// flags — they must NOT be forwarded to Kernel's create-browser API.
 const KERNEL_CONTROL_KEYS: &[&str] = &["spider"];
 
-/// Default create body (cheap + stealthy), with `provider_options.kernel`
-/// layered over the top so callers can flip `headless`, request `gpu`, pin a
-/// `proxy_id`, set a `viewport`, raise `timeout_seconds`, etc. Caller keys win.
+/// Create body = the host's `defaults` with `provider_options.kernel` layered
+/// over the top (caller keys win), so callers can flip `headless`, request
+/// `gpu`, pin a `proxy_id`, set a `viewport`, raise `timeout_seconds`, etc.
 /// Adapter-control flags ([`KERNEL_CONTROL_KEYS`]) are stripped so they never
 /// reach Kernel's API.
-fn build_kernel_create_body(req: &ScrapeRequest) -> serde_json::Value {
-    let mut body = serde_json::json!({ "headless": true, "stealth": true });
+fn build_kernel_create_body(req: &ScrapeRequest, defaults: &serde_json::Value) -> serde_json::Value {
+    let mut body = defaults.clone();
     if let (Some(serde_json::Value::Object(opts)), serde_json::Value::Object(base)) =
         (req.provider_options.get("kernel"), &mut body)
     {
@@ -502,15 +562,14 @@ fn build_kernel_create_body(req: &ScrapeRequest) -> serde_json::Value {
     body
 }
 
-/// Whether to use the spider::Website driver. Default is spider (faster on a
-/// ≥2 vCPU task); set `provider_options.kernel.spider = false` to opt into raw
-/// chromey ([`drive_cdp`]) instead.
-fn kernel_use_spider(req: &ScrapeRequest) -> bool {
+/// Whether to use the spider::Website driver. Falls back to the host's
+/// `default` when the request doesn't set `provider_options.kernel.spider`.
+fn kernel_use_spider(req: &ScrapeRequest, default: bool) -> bool {
     req.provider_options
         .get("kernel")
         .and_then(|o| o.get("spider"))
         .and_then(|v| v.as_bool())
-        .unwrap_or(true)
+        .unwrap_or(default)
 }
 
 /// `POST {create_url}` with `Authorization: Bearer <api_key>` → parse the
@@ -580,6 +639,7 @@ async fn fetch_kernel_cost_dollars(
     create_url: &str,
     session: &KernelSession,
     api_key: &str,
+    rates: &KernelRates,
 ) -> Option<f64> {
     let url = format!(
         "{}/{}",
@@ -612,7 +672,7 @@ async fn fetch_kernel_cost_dollars(
         .get("gpu")
         .and_then(|x| x.as_bool())
         .unwrap_or(session.gpu);
-    Some(kernel_cost_dollars(uptime_ms, headless, gpu))
+    Some(kernel_cost_dollars(uptime_ms, headless, gpu, rates))
 }
 
 /// `DELETE {create_url}/{session_id}` — best-effort, short-bounded. Errors are
@@ -638,16 +698,19 @@ async fn delete_kernel_browser(
 /// them — the same channel mechanism gottem uses to send pages to the user — so
 /// we subscribe before crawling and collect after.
 ///
-/// `with_stealth(false)` + `with_fingerprint(false)` are deliberate: Kernel
-/// provisions a managed anti-detect browser server-side, so spider must NOT
-/// inject its own stealth/fingerprint patches — double-spoofing produces
-/// internally inconsistent signals that are *easier* to detect. `with_limit(1)`
-/// is the guardrail that keeps a chrome crawl from walking the whole site.
+/// `stealth` / `fingerprint` come from host config. Hosts driving a managed
+/// anti-detect browser (Kernel) pass `false` for both: that browser already
+/// handles stealth server-side, so spider injecting its own patches would
+/// double-spoof and produce internally inconsistent, *easier*-to-detect signals.
+/// `with_limit(1)` is the guardrail that keeps a chrome crawl from walking the
+/// whole site.
 ///
 /// Bounded by the route timeout AND the cancel token.
 async fn scrape_via_spider(
     cdp_ws_url: &str,
     target_url: &str,
+    stealth: bool,
+    fingerprint: bool,
     route_timeout: Duration,
     cancel: &CancelToken,
 ) -> Result<(u16, String), FetchError> {
@@ -655,8 +718,8 @@ async fn scrape_via_spider(
 
     let mut website = Website::new(target_url)
         .with_limit(1)
-        .with_stealth(false)
-        .with_fingerprint(false)
+        .with_stealth(stealth)
+        .with_fingerprint(fingerprint)
         .with_chrome_connection(Some(cdp_ws_url.to_string()))
         .build()
         .map_err(|_| FetchError::Config("spider website build failed (invalid url?)".into()))?;
@@ -780,61 +843,71 @@ mod tests {
     }
 
     #[test]
-    fn kernel_create_body_defaults_headless_stealth() {
-        let req = ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
-        let body = build_kernel_create_body(&req);
-        assert_eq!(body["headless"], serde_json::json!(true));
-        assert_eq!(body["stealth"], serde_json::json!(true));
-    }
-
-    #[test]
-    fn kernel_create_body_provider_options_override_defaults() {
+    fn kernel_create_body_layers_overrides_on_host_defaults() {
+        let defaults = serde_json::json!({ "headless": true, "stealth": true });
         let mut req = ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
         req.provider_options.insert(
             "kernel".to_string(),
             serde_json::json!({ "headless": false, "gpu": true }),
         );
-        let body = build_kernel_create_body(&req);
+        let body = build_kernel_create_body(&req, &defaults);
         assert_eq!(body["headless"], serde_json::json!(false)); // caller wins
-        assert_eq!(body["gpu"], serde_json::json!(true));
-        assert_eq!(body["stealth"], serde_json::json!(true)); // untouched default kept
+        assert_eq!(body["gpu"], serde_json::json!(true)); // added
+        assert_eq!(body["stealth"], serde_json::json!(true)); // untouched host default kept
     }
 
     #[test]
     fn kernel_control_flag_not_forwarded_to_create_body() {
+        let defaults = serde_json::json!({ "headless": true });
         let mut req = ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
         req.provider_options.insert(
             "kernel".to_string(),
             serde_json::json!({ "spider": true, "headless": false }),
         );
-        let body = build_kernel_create_body(&req);
+        let body = build_kernel_create_body(&req, &defaults);
         assert_eq!(body["headless"], serde_json::json!(false)); // real Kernel field passes
         assert!(body.get("spider").is_none()); // control flag stripped
     }
 
     #[test]
-    fn kernel_use_spider_reads_flag() {
+    fn kernel_use_spider_honors_host_default_and_override() {
         let base = || ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
-        assert!(kernel_use_spider(&base())); // absent → spider (default)
+        // Absent → host default (either way).
+        assert!(kernel_use_spider(&base(), true));
+        assert!(!kernel_use_spider(&base(), false));
+        // Request override wins over the host default.
         let mut off = base();
         off.provider_options
             .insert("kernel".into(), serde_json::json!({ "spider": false }));
-        assert!(!kernel_use_spider(&off)); // opt out → chromey
+        assert!(!kernel_use_spider(&off, true));
         let mut on = base();
         on.provider_options
             .insert("kernel".into(), serde_json::json!({ "spider": true }));
-        assert!(kernel_use_spider(&on));
+        assert!(kernel_use_spider(&on, false));
     }
 
     #[test]
     fn kernel_cost_dollars_picks_rate_by_mode() {
-        // 60s headless → 60 × $0.0000166667.
-        assert!((kernel_cost_dollars(60_000, true, false) - 0.001_000_002).abs() < 1e-9);
-        // 60s headful → 60 × $0.0001333336.
-        assert!((kernel_cost_dollars(60_000, false, false) - 0.008_000_016).abs() < 1e-9);
+        let rates = KernelRates {
+            headless_per_sec: 0.000_016_666_7,
+            headful_per_sec: 0.000_133_333_6,
+            gpu_per_sec: 0.000_800_001_6,
+        };
+        // 60s headless → 60 × headless rate.
+        assert!((kernel_cost_dollars(60_000, true, false, &rates) - 0.001_000_002).abs() < 1e-9);
+        // 60s headful → 60 × headful rate.
+        assert!((kernel_cost_dollars(60_000, false, false, &rates) - 0.008_000_016).abs() < 1e-9);
         // GPU is headful-only and dominates even if `headless` is somehow set.
-        assert!((kernel_cost_dollars(10_000, true, true) - 0.008_000_016).abs() < 1e-9);
-        // No uptime → no cost (caller then keeps the static estimate).
-        assert_eq!(kernel_cost_dollars(0, true, false), 0.0);
+        assert!((kernel_cost_dollars(10_000, true, true, &rates) - 0.008_000_016).abs() < 1e-9);
+        // No uptime → no cost.
+        assert_eq!(kernel_cost_dollars(0, true, false, &rates), 0.0);
+    }
+
+    #[test]
+    fn kernel_config_default_is_neutral() {
+        // OSS ships no pricing and a lean, non-tuned policy.
+        let c = KernelConfig::default();
+        assert!(!c.default_use_spider);
+        assert!(c.rates.is_none());
     }
 }
