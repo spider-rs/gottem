@@ -45,7 +45,7 @@
 #![deny(rust_2018_idioms)]
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -306,6 +306,9 @@ pub struct KernelConfig {
     /// spider::Website stealth / fingerprint toggles for the spider driver.
     pub spider_stealth: bool,
     pub spider_fingerprint: bool,
+    /// Enable spider request interception (blocks visuals/CSS/ads/analytics,
+    /// keeps JS) — faster + cheaper Kernel time, HTML DOM intact. Off in OSS.
+    pub spider_intercept: bool,
     /// Per-second pricing. `None` skips the usage meter entirely — no actual
     /// cost is reported and the host falls back to the route's static estimate.
     pub rates: Option<KernelRates>,
@@ -318,6 +321,7 @@ impl Default for KernelConfig {
             create_defaults: serde_json::json!({ "headless": true }),
             spider_stealth: true,
             spider_fingerprint: true,
+            spider_intercept: false,
             rates: None,
         }
     }
@@ -448,13 +452,20 @@ impl Adapter for KernelCdpAdapter {
         };
         let create_body = build_kernel_create_body(req, &self.config.create_defaults);
 
-        // ---- 1. Mint a browser session (cancel + timeout bounded) ----------
+        // Bound the whole create→drive op by a SINGLE deadline (= route timeout),
+        // handing each step only the time left. Otherwise a slow create plus a
+        // slow drive could each consume the full timeout (~2× total) and 504 at
+        // the ALB. Keeps the response inside the ALB idle window.
+        let deadline = Instant::now() + route.timeout();
+        let remaining = || deadline.saturating_duration_since(Instant::now());
+
+        // ---- 1. Mint a browser session (cancel + remaining-bounded) --------
         let session = create_kernel_browser(
             &self.http,
             &create_url,
             &api_key,
             &create_body,
-            route.timeout(),
+            remaining(),
             cancel,
         )
         .await?;
@@ -468,7 +479,8 @@ impl Adapter for KernelCdpAdapter {
                 req.url.as_str(),
                 self.config.spider_stealth,
                 self.config.spider_fingerprint,
-                route.timeout(),
+                self.config.spider_intercept,
+                remaining(),
                 cancel,
             )
             .await
@@ -476,8 +488,8 @@ impl Adapter for KernelCdpAdapter {
             drive_cdp(
                 &session.cdp_ws_url,
                 req.url.as_str(),
-                self.connect_timeout,
-                route.timeout(),
+                self.connect_timeout.min(remaining()),
+                remaining(),
                 cancel,
             )
             .await
@@ -494,10 +506,20 @@ impl Adapter for KernelCdpAdapter {
             _ => None,
         };
 
-        // ---- 4. Always release the session — Kernel bills per running second.
-        // Best-effort: a failed delete must not mask a successful scrape, and a
-        // session left dangling is reaped by Kernel's own `timeout_seconds`.
-        delete_kernel_browser(&self.http, &create_url, &session.session_id, &api_key).await;
+        // ---- 4. Release the session OFF the response critical path. Kernel
+        // bills per running second, so we still fire the DELETE — but spawned,
+        // not awaited, so a slow release can't push the response past the ALB
+        // timeout. If the task is dropped, Kernel's own `timeout_seconds` reaps
+        // the session anyway.
+        {
+            let (http, url, sid, key) = (
+                self.http.clone(),
+                create_url.clone(),
+                session.session_id.clone(),
+                api_key.clone(),
+            );
+            tokio::spawn(async move { delete_kernel_browser(&http, &url, &sid, &key).await });
+        }
 
         let (status, html) = driven?;
         if status >= 400 {
@@ -711,16 +733,25 @@ async fn scrape_via_spider(
     target_url: &str,
     stealth: bool,
     fingerprint: bool,
+    intercept: bool,
     route_timeout: Duration,
     cancel: &CancelToken,
 ) -> Result<(u16, String), FetchError> {
+    use spider::features::chrome_common::RequestInterceptConfiguration;
     use spider::website::Website;
 
-    let mut website = Website::new(target_url)
+    let mut builder = Website::new(target_url);
+    builder
         .with_limit(1)
         .with_stealth(stealth)
         .with_fingerprint(fingerprint)
-        .with_chrome_connection(Some(cdp_ws_url.to_string()))
+        .with_chrome_connection(Some(cdp_ws_url.to_string()));
+    if intercept {
+        // new(true) keeps JS but blocks visuals/CSS/ads/analytics — faster +
+        // cheaper Kernel time, HTML DOM intact.
+        builder.with_chrome_intercept(RequestInterceptConfiguration::new(true));
+    }
+    let mut website = builder
         .build()
         .map_err(|_| FetchError::Config("spider website build failed (invalid url?)".into()))?;
 

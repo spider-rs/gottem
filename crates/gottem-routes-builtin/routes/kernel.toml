@@ -28,7 +28,10 @@ endpoint    = "https://api.onkernel.com/browsers"
 method      = "GET"
 tier        = 8
 cost        = 100
-timeout_ms  = 90000
+# Kept under typical ALB/proxy idle windows (60s): the adapter bounds the whole
+# create→drive op by this single deadline, so a slow session fails cleanly
+# (and releases) instead of a 504. Raise only if upstream idle timeouts allow.
+timeout_ms  = 45000
 concurrency = 5
 
 [route.auth]
