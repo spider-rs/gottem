@@ -12,8 +12,8 @@
 //!
 //! [`KernelCdpAdapter`] covers Kernel ([onkernel.com](https://kernel.sh)), which
 //! has no *static* endpoint: it `POST`s `/browsers` to mint a per-session
-//! `cdp_ws_url`, drives it (raw chromey [`drive_cdp`] by default, or
-//! `spider::Website` when `provider_options.kernel.spider = true`), then
+//! `cdp_ws_url`, drives it (`spider::Website` by default, or raw chromey
+//! [`drive_cdp`] when `provider_options.kernel.spider = false`), then
 //! `DELETE`s the session (Kernel bills per running second). It reports
 //! [`AdapterKind::Custom`]`("kernel_cdp")`.
 //!
@@ -286,11 +286,12 @@ const KERNEL_DEFAULT_CREATE_URL: &str = "https://api.onkernel.com/browsers";
 /// *running* second, so releasing promptly is a cost guarantee, not just hygiene.
 ///
 /// Two drivers, switchable per request:
-/// - **default** — raw chromey ([`drive_cdp`]): direct CDP, lean and fast.
-/// - **`provider_options.kernel.spider = true`** — [`spider::Website`] via
-///   [`scrape_via_spider`]: crawl() + subscription (streams pages to the user),
-///   stealth/fingerprint off. Requires spider's `chrome_intercept` feature for
+/// - **default** — [`spider::Website`] via [`scrape_via_spider`]: crawl() +
+///   subscription (streams pages to the user), stealth/fingerprint off. Faster
+///   on a ≥2 vCPU task; requires spider's `chrome_intercept` feature for
 ///   page-completion detection over the remote browser.
+/// - **`provider_options.kernel.spider = false`** — raw chromey
+///   ([`drive_cdp`]): direct CDP, lean; survives a 1 vCPU task.
 ///
 /// Browser config is tunable per request via `provider_options.kernel` (e.g.
 /// `{ "headless": false, "gpu": true, "proxy_id": "...", "viewport": {...} }`),
@@ -398,10 +399,10 @@ impl Adapter for KernelCdpAdapter {
         )
         .await?;
 
-        // ---- 2. Drive the remote browser. Default is raw chromey ([`drive_cdp`])
-        // — direct CDP, lean and fast. Opt into the spider::Website path
-        // (crawl() + subscription, quality steps) per request with
-        // `provider_options.kernel.spider = true`.
+        // ---- 2. Drive the remote browser. Default is spider::Website (crawl()
+        // + subscription, quality steps; faster on ≥2 vCPU). Opt into raw
+        // chromey ([`drive_cdp`], direct CDP) per request with
+        // `provider_options.kernel.spider = false`.
         let driven = if kernel_use_spider(req) {
             scrape_via_spider(&session.cdp_ws_url, req.url.as_str(), route.timeout(), cancel).await
         } else {
@@ -501,14 +502,15 @@ fn build_kernel_create_body(req: &ScrapeRequest) -> serde_json::Value {
     body
 }
 
-/// Whether this request opted into the spider::Website driver
-/// (`provider_options.kernel.spider = true`). Default is raw chromey.
+/// Whether to use the spider::Website driver. Default is spider (faster on a
+/// ≥2 vCPU task); set `provider_options.kernel.spider = false` to opt into raw
+/// chromey ([`drive_cdp`]) instead.
 fn kernel_use_spider(req: &ScrapeRequest) -> bool {
     req.provider_options
         .get("kernel")
         .and_then(|o| o.get("spider"))
         .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+        .unwrap_or(true)
 }
 
 /// `POST {create_url}` with `Authorization: Bearer <api_key>` → parse the
@@ -813,15 +815,15 @@ mod tests {
     #[test]
     fn kernel_use_spider_reads_flag() {
         let base = || ScrapeRequest::get(Url::parse("https://example.com/").unwrap());
-        assert!(!kernel_use_spider(&base())); // absent → chromey (default)
+        assert!(kernel_use_spider(&base())); // absent → spider (default)
+        let mut off = base();
+        off.provider_options
+            .insert("kernel".into(), serde_json::json!({ "spider": false }));
+        assert!(!kernel_use_spider(&off)); // opt out → chromey
         let mut on = base();
         on.provider_options
             .insert("kernel".into(), serde_json::json!({ "spider": true }));
         assert!(kernel_use_spider(&on));
-        let mut off = base();
-        off.provider_options
-            .insert("kernel".into(), serde_json::json!({ "spider": false }));
-        assert!(!kernel_use_spider(&off));
     }
 
     #[test]
