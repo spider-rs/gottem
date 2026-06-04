@@ -31,8 +31,8 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    cancel::CancelToken, error::FetchError, orchestrator::Orchestrator, request::ScrapeRequest,
-    route::RouteId, tier::Tier,
+    cancel::CancelToken, catalog::RouteCatalog, error::FetchError, orchestrator::Orchestrator,
+    request::ScrapeRequest, route::RouteId, tier::Tier,
 };
 
 /// One page result emitted by a crawl. Carries enough metadata to make
@@ -146,6 +146,16 @@ pub struct CrawlRequest {
     /// existing static-`concurrency` behavior byte-for-byte. Ignored by
     /// `SpiderCloud` (the vendor controls parallelism there too).
     pub adaptive_concurrency: Option<Arc<tokio::sync::Semaphore>>,
+    /// Optional override for the catalog the **local** engine's per-URL scrape
+    /// ladder draws from. `None` (the default) leaves the crawl adapter's baked
+    /// strategy untouched — typically a ladder over the orchestrator's full
+    /// catalog. When set, the local engine builds a fresh ladder over this
+    /// catalog for every per-URL fetch, so a hosted layer can restrict crawling
+    /// to the vendors it can authenticate (pooled key or per-request BYOK)
+    /// without OSS gottem ever knowing about keys. Ignored by the `SpiderCloud`
+    /// engine — there the vendor runs the whole crawl remotely, so there's no
+    /// per-URL ladder to constrain.
+    pub ladder_catalog: Option<Arc<RouteCatalog>>,
     /// Free-form crawl-level hints — surfaced to adapters that want them
     /// (e.g. Spider-specific knobs not modelled here).
     pub extra: HashMap<String, serde_json::Value>,
@@ -167,6 +177,7 @@ impl CrawlRequest {
             engine: CrawlEngine::default(),
             concurrency: 4,
             adaptive_concurrency: None,
+            ladder_catalog: None,
             extra: HashMap::new(),
         }
     }
@@ -220,6 +231,15 @@ impl CrawlRequest {
     /// see no behavior change.
     pub fn with_adaptive_concurrency(mut self, sem: Option<Arc<tokio::sync::Semaphore>>) -> Self {
         self.adaptive_concurrency = sem;
+        self
+    }
+
+    /// Constrain the local engine's per-URL scrape ladder to a specific
+    /// catalog. See [`CrawlRequest::ladder_catalog`]. Pass `None` to clear an
+    /// existing override and fall back to the crawl adapter's default strategy.
+    /// Strictly opt-in: existing callers see no behavior change.
+    pub fn with_ladder_catalog(mut self, catalog: Option<Arc<RouteCatalog>>) -> Self {
+        self.ladder_catalog = catalog;
         self
     }
 

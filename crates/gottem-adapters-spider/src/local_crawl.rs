@@ -297,7 +297,23 @@ impl CrawlAdapter for SpiderLocalCrawlAdapter {
         };
         let cancel = cancel.clone();
         let scrape_template = req.scrape.clone();
-        let strategy = self.strategy.clone();
+        // Per-request ladder-catalog override (hosted-layer auth gate): when the
+        // caller pins a catalog, build a fresh ladder over it so per-URL fetches
+        // only climb into vendors the caller can authenticate — never surfacing
+        // a late `missing env var` auth error mid-crawl. We keep the adapter's
+        // configured retry budget and use this page's required caps, mirroring
+        // the default ladder's shape. `None` = the adapter's baked strategy,
+        // unchanged byte-for-byte.
+        let strategy: Arc<dyn RetryStrategy> = match &req.ladder_catalog {
+            Some(catalog) => Arc::new(LadderStrategy::new(
+                catalog.clone(),
+                Tier::T0,
+                Tier::T9,
+                req.scrape.required_caps,
+                self.strategy.max_retries(),
+            )),
+            None => self.strategy.clone(),
+        };
         let route_id = route.id.clone();
         let tier = route.tier;
         let cost_milli = route.cost;
