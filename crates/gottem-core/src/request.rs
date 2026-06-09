@@ -75,6 +75,14 @@ pub struct ScrapeRequest {
     /// `return_page_links` flag — links live alongside the content
     /// payloads, not inside them.
     pub return_links: bool,
+    /// Per-request vendor-spend ceiling in **milli-cents** (1 = $0.0001). The
+    /// orchestrator funds a *fresh* [`crate::Budget`] of this size for each
+    /// `fetch`/`fetch_hedge`/`fetch_race` call, so the ladder for this one
+    /// request can spend up to this much across all tier attempts. `None`
+    /// falls back to the orchestrator's configured default
+    /// (`GOTTEM_BUDGET_MC`). This is per-request, not process-global —
+    /// exhausting it fails only this request, never the next one.
+    pub budget_mc: Option<u64>,
 }
 
 impl ScrapeRequest {
@@ -94,6 +102,7 @@ impl ScrapeRequest {
             credentials: HashMap::new(),
             formats: HashSet::new(),
             return_links: false,
+            budget_mc: None,
         }
     }
 

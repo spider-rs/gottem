@@ -127,14 +127,46 @@ impl Orchestrator {
         self
     }
 
+    /// A fresh per-request [`Budget`] for one `fetch*` call. Sized from the
+    /// request's `budget_mc` override, falling back to the orchestrator's
+    /// configured default limit. Each request gets its own counter, so one
+    /// request exhausting its budget never starves the next — the whole point
+    /// of moving the ceiling off the process-global `self.budget`.
+    fn request_budget(&self, req: &ScrapeRequest) -> Budget {
+        Budget::new(req.budget_mc.unwrap_or_else(|| self.budget.limit()))
+    }
+
     /// Single-attempt dispatch through a specific route. Enforces budget, circuit breaker,
     /// per-route concurrency limit, and propagates cancellation via `tokio::select!`.
+    ///
+    /// Charges the process-global `self.budget`. Prefer the `fetch*` entry
+    /// points, which fund a per-request budget; this direct-call variant is
+    /// kept for low-level callers (CLI, adapter chaining) that drive a single
+    /// route by hand.
     pub async fn execute_once(
         &self,
         route: &Route,
         req: &ScrapeRequest,
         attempt: u32,
         cancel: &CancelToken,
+    ) -> Result<ScrapeResponse, FetchError> {
+        // SAFETY of accounting: the global budget here is the legacy path. The
+        // ladder entry points below route through `execute_once_budgeted` with
+        // a fresh per-request budget instead.
+        let budget = Budget::new(self.budget.limit());
+        self.execute_once_budgeted(route, req, attempt, cancel, &budget)
+            .await
+    }
+
+    /// Like [`Self::execute_once`] but charges the caller-supplied `budget`
+    /// (one per request) instead of the process-global accumulator.
+    async fn execute_once_budgeted(
+        &self,
+        route: &Route,
+        req: &ScrapeRequest,
+        attempt: u32,
+        cancel: &CancelToken,
+        budget: &Budget,
     ) -> Result<ScrapeResponse, FetchError> {
         let breaker = self
             .breakers
@@ -144,7 +176,7 @@ impl Orchestrator {
             return Err(FetchError::CircuitOpen(route.id.clone()));
         }
 
-        self.budget.try_spend(route.cost)?;
+        budget.try_spend(route.cost)?;
 
         let sem = self
             .semaphores
@@ -214,6 +246,7 @@ impl Orchestrator {
         cancel: CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
         let max_retries = strategy.max_retries();
+        let budget = self.request_budget(&req);
 
         let mut current_route = match self.stats.promoted_route(&req.url, &self.catalog) {
             Some(promoted) => promoted,
@@ -232,7 +265,7 @@ impl Orchestrator {
             let route_for_attempt = current_route.clone();
 
             match self
-                .execute_once(&route_for_attempt, &req, attempt, &cancel)
+                .execute_once_budgeted(&route_for_attempt, &req, attempt, &cancel, &budget)
                 .await
             {
                 Ok(resp) => {
@@ -317,6 +350,11 @@ impl Orchestrator {
             return self.fetch(req, strategy, cancel).await;
         }
 
+        // One budget for this whole hedged request; shared (by &ref) across the
+        // concurrently-fired routes below. Budget is atomic, so the parallel
+        // hedges can't collectively overspend it.
+        let budget = self.request_budget(&req);
+
         // Build the ladder of routes by walking the strategy. Cap by max_hedges + 1 (primary + N).
         let first = strategy.initial().ok_or(FetchError::Exhausted)?;
         let mut routes: Vec<Arc<Route>> = vec![first.clone()];
@@ -348,7 +386,9 @@ impl Orchestrator {
         // Degenerate case: strategy produced only one route — fall back to a single fetch.
         if routes.len() == 1 {
             let only = routes.pop().expect("non-empty");
-            let resp = self.execute_once(&only, &req, 0, &cancel).await?;
+            let resp = self
+                .execute_once_budgeted(&only, &req, 0, &cancel, &budget)
+                .await?;
             if let Some(reason) = validate(&only, &resp.body, resp.content_str()) {
                 return Err(FetchError::Validation(reason));
             }
@@ -359,6 +399,7 @@ impl Orchestrator {
 
         let race_cancel = CancelToken::new();
         let mut tasks = FuturesUnordered::new();
+        let budget_ref = &budget;
 
         for (i, route) in routes.iter().enumerate() {
             let route = route.clone();
@@ -385,7 +426,7 @@ impl Orchestrator {
                     biased;
                     _ = outer.cancelled() => Err(FetchError::Cancelled),
                     _ = inner.cancelled() => Err(FetchError::Cancelled),
-                    r = self.execute_once(&route, req_ref, attempt, &inner) => r,
+                    r = self.execute_once_budgeted(&route, req_ref, attempt, &inner, budget_ref) => r,
                 }
             });
         }
@@ -435,8 +476,10 @@ impl Orchestrator {
             return Err(FetchError::Exhausted);
         }
 
+        let budget = self.request_budget(&req);
         let race_cancel = CancelToken::new();
         let mut tasks = FuturesUnordered::new();
+        let budget_ref = &budget;
 
         for route in routes {
             let outer = cancel.clone();
@@ -448,7 +491,7 @@ impl Orchestrator {
                     biased;
                     _ = outer.cancelled() => Err(FetchError::Cancelled),
                     _ = inner.cancelled() => Err(FetchError::Cancelled),
-                    r = self.execute_once(&route_arc, req_ref, 0, &inner) => r,
+                    r = self.execute_once_budgeted(&route_arc, req_ref, 0, &inner, budget_ref) => r,
                 }
             });
         }

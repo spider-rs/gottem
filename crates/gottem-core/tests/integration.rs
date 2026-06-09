@@ -242,6 +242,51 @@ async fn budget_ceiling_blocks_escalation() {
 }
 
 #[tokio::test]
+async fn budget_is_per_request_not_global() {
+    // Regression: the budget used to be one process-global accumulator that
+    // never reset, so once the lifetime ceiling was hit EVERY later scrape
+    // failed with "budget exceeded" until the process restarted.
+    //
+    // With a 15 mc default, a single request can afford T0 ($0) + escalation to
+    // T4 (10 mc) = 10 mc. Three requests sharing a GLOBAL counter would reach
+    // 30 > 15 and fail from the second on. Per-request budgets give each call a
+    // fresh 15, so all three succeed.
+    let h = build(15);
+    h.mock.set("local.http", 200, b"tiny"); // too short -> escalate T0 -> T4
+
+    for i in 0..3 {
+        let strategy = ladder(h.catalog.clone(), 5);
+        let req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
+        let resp = h
+            .orch
+            .fetch(req, strategy, CancelToken::new())
+            .await
+            .unwrap_or_else(|e| panic!("request {i} should succeed on a fresh budget, got {e:?}"));
+        assert_eq!(resp.tier, Tier::T4, "request {i} should settle at T4");
+    }
+}
+
+#[tokio::test]
+async fn per_request_budget_mc_override_caps_spend() {
+    // A generous orchestrator default, but the request pins its own ceiling
+    // below the next tier's cost — escalation must be blocked for THIS request.
+    let h = build(10_000);
+    h.mock.set("local.http", 200, b"tiny"); // would escalate to T4 (10 mc)
+    let strategy = ladder(h.catalog.clone(), 5);
+    let mut req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
+    req.budget_mc = Some(5); // below T4's 10 mc -> can't escalate
+    let err = h
+        .orch
+        .fetch(req, strategy, CancelToken::new())
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, FetchError::BudgetExceeded { .. }),
+        "override should cap spend, got {err:?}"
+    );
+}
+
+#[tokio::test]
 async fn race_winner_cancels_losers() {
     let h = build(10_000);
     h.mock.delay_ms.store(50, Ordering::Relaxed);
