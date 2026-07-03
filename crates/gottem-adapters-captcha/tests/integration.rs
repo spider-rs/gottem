@@ -35,6 +35,7 @@ fn captcha_route() -> Route {
         concurrency: 4,
         retry_on: Default::default(),
         cost_extract: None,
+        geo_map: None,
     }
 }
 

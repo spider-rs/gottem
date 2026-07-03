@@ -17,6 +17,10 @@
 //! - **No per-request headers.** Headers are baked into the shared `spider::Client` at
 //!   adapter construction time. If you need per-request headers, route through
 //!   `gottem-adapters-http` instead.
+//! - **No `provider_options` / `geo`.** There is no vendor API to forward options to —
+//!   this adapter drives a local client. Everything request-shaping (proxy, headers,
+//!   UA) is baked into the `spider::Client` at construction; per-request knobs that
+//!   only make sense for cloud vendors are deliberately ignored here.
 //!
 //! ## Tier coverage
 //!

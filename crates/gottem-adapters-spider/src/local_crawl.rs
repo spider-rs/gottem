@@ -87,6 +87,14 @@ use spider::{
 use tokio::sync::{mpsc, Semaphore};
 use url::Url;
 
+/// Hard page ceiling applied when a crawl requests `limit == 0` ("unlimited").
+/// The frontier channel and spider's visited set grow with dispatched URLs, so
+/// a truly uncapped crawl of a huge site would grow process memory without
+/// bound. 100k pages ≈ tens of MB of frontier/visited state — far above any
+/// realistic single crawl, low enough to bound the pathological case. Callers
+/// needing more set an explicit `limit`.
+pub const UNLIMITED_PAGE_CEILING: u32 = 100_000;
+
 /// Local BFS crawl adapter. Holds a `Weak<Orchestrator>` to avoid creating
 /// a reference cycle — the orchestrator owns the
 /// [`CrawlAdapterRegistry`](gottem_core::CrawlAdapterRegistry) that owns
@@ -171,6 +179,13 @@ impl SpiderLocalCrawlAdapter {
 
     /// Plug in a custom `spider::Client` (proxies, custom UA, etc.) for
     /// the robots fetch.
+    ///
+    /// **Proxy caveat:** per-URL *page* fetches go through the orchestrator's
+    /// scrape ladder, so they exit via whatever proxy class the winning vendor
+    /// route provides. The **robots.txt** fetch is the exception — it uses
+    /// this client, and the default (`ClientBuilder::default()`) carries no
+    /// proxy, so robots requests leave from the host's own egress IP. Pass a
+    /// proxied client here when that bypass matters for your deployment.
     pub fn with_spider_client(mut self, client: spider::Client) -> Self {
         self.spider_client = Some(client);
         self
@@ -247,10 +262,18 @@ impl CrawlAdapter for SpiderLocalCrawlAdapter {
         // and will yield their `PageEntry`, but no further URLs reach
         // the worker pool. Off-by-one note: spider treats `budget == 1`
         // as already exceeded, so `limit + 1` allows exactly `limit`
-        // URLs through. `limit == 0` means unlimited — skip the budget.
-        if req.limit > 0 {
+        // URLs through. `limit == 0` means "unlimited" — but still gets
+        // [`UNLIMITED_PAGE_CEILING`] as a hard budget: the frontier and
+        // visited set grow with dispatched URLs, so a genuinely uncapped
+        // crawl of a huge site would grow process memory without bound.
+        {
+            let effective = if req.limit > 0 {
+                req.limit
+            } else {
+                UNLIMITED_PAGE_CEILING
+            };
             let mut budget: spider::hashbrown::HashMap<&str, u32> = Default::default();
-            budget.insert("*", req.limit.saturating_add(1));
+            budget.insert("*", effective.saturating_add(1));
             website.with_budget(Some(budget));
         }
         // `determine_limits()` must run after `with_budget` to flip the

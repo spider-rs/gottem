@@ -44,6 +44,7 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms)]
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -173,13 +174,32 @@ async fn drive_cdp(
     // browser reference. We deliberately do NOT `abort()` — aborting mid-stream
     // would interrupt the handler's own teardown and surface as a JoinError.
     drop(browser);
-    let _ = tokio::time::timeout(Duration::from_secs(2), handler_task).await;
+    if tokio::time::timeout(Duration::from_secs(2), handler_task)
+        .await
+        .is_err()
+    {
+        // Detached — the task ends on its own shortly after, but count it so
+        // a soak run can prove detaches aren't accumulating (a vendor proxy
+        // holding connections open would show up here first).
+        DETACHED_HANDLER_TASKS.fetch_add(1, Ordering::Relaxed);
+    }
 
     match work_outcome {
         Ok(Ok(out)) => Ok(out),
         Ok(Err(e)) => Err(e),
         Err(_) => Err(FetchError::Timeout(route_timeout)),
     }
+}
+
+/// CDP handler tasks that outlived the 2-second post-drop join window and
+/// were detached (see [`drive_cdp`] cleanup). Monotonic; steady growth means
+/// remote endpoints are holding WebSockets open past browser drop.
+static DETACHED_HANDLER_TASKS: AtomicU64 = AtomicU64::new(0);
+
+/// Total detached CDP handler tasks — host observability hook, the
+/// chrome-adapter counterpart of [`kernel_release_failures`].
+pub fn detached_handler_tasks() -> u64 {
+    DETACHED_HANDLER_TASKS.load(Ordering::Relaxed)
 }
 
 /// Build the `ScrapeResponse` shared by both CDP adapters. The page HTML is
@@ -211,6 +231,11 @@ fn cdp_response(
 }
 
 /// Open a fresh tab, navigate to `url`, wait for `load`, return `(status, html)`.
+///
+/// The tab is explicitly closed (best-effort, 2s-bounded) before returning —
+/// on vendor-shared remote browsers (Browserless, Brightdata Scraping
+/// Browser) the browser process outlives our WebSocket, so a tab that's only
+/// dropped client-side accumulates server-side.
 async fn navigate_and_extract(
     browser: &chromey::Browser,
     url: &str,
@@ -220,19 +245,29 @@ async fn navigate_and_extract(
         .await
         .map_err(|e| FetchError::Network(format!("new_page: {e}")))?;
 
-    // Wait for the main frame to finish navigating. We don't fail on wait_for_navigation
-    // errors because some single-page apps never emit a final load — we still want to
-    // capture whatever DOM is present.
-    let _ = page.wait_for_navigation().await;
+    let result = async {
+        // Wait for the main frame to finish navigating. We don't fail on
+        // wait_for_navigation errors because some single-page apps never emit
+        // a final load — we still want to capture whatever DOM is present.
+        let _ = page.wait_for_navigation().await;
 
-    let html = page
-        .content()
-        .await
-        .map_err(|e| FetchError::Parse(format!("content: {e}")))?;
+        let html = page
+            .content()
+            .await
+            .map_err(|e| FetchError::Parse(format!("content: {e}")))?;
 
-    // chromey doesn't always surface the main-frame HTTP status code in a
-    // first-class way; we default to 200 on successful HTML extraction.
-    Ok((200, html))
+        // chromey doesn't always surface the main-frame HTTP status code in a
+        // first-class way; we default to 200 on successful HTML extraction.
+        Ok((200, html))
+    }
+    .await;
+
+    // Close the tab regardless of outcome. Errors swallowed — the fetch
+    // result matters more than the close ack, and drive_cdp's browser drop
+    // is the local backstop either way.
+    let _ = tokio::time::timeout(Duration::from_secs(2), page.close()).await;
+
+    result
 }
 
 /// Resolve the route's CDP endpoint into a final WebSocket URL string.
@@ -242,6 +277,23 @@ async fn navigate_and_extract(
 /// 2. If `AuthSpec::WsUserinfo` is set, inject the env-var-derived `user:pass` into the URL.
 pub(crate) fn build_ws_url(route: &Route, req: &ScrapeRequest) -> Result<String, FetchError> {
     let mut url = route.endpoint.render(req)?;
+
+    // Query-kind geo mapping: CDP vendors that accept a country pin do it on
+    // the WS URL's query string (e.g. Browserless `proxyCountry`).
+    if let (Some(spec), Some(geo)) = (&route.geo_map, &req.geo) {
+        if spec.kind == gottem_core::GeoParamKind::Query {
+            url.query_pairs_mut()
+                .append_pair(&spec.param, &spec.format_value(geo));
+        }
+    }
+
+    // Per-vendor provider_options ride the WS URL query string for CDP
+    // vendors (Browserless `blockAds`, Browserbase session flags, …) — the
+    // query-param twin of the HTTP adapters' JSON-body merge. Scalars only;
+    // caller values replace same-named pairs so callers can override the
+    // route template's baked-in flags. Applied BEFORE userinfo injection so
+    // a malformed option errors before credentials are attached.
+    merge_ws_query_provider_options(&mut url, route, req)?;
 
     if let AuthSpec::WsUserinfo { env } = &route.auth {
         // Per-request resolver — BYOK keys shadow the process env for CDP
@@ -264,6 +316,63 @@ pub(crate) fn build_ws_url(route: &Route, req: &ScrapeRequest) -> Result<String,
     }
 
     Ok(url.to_string())
+}
+
+/// Merge the caller's per-vendor `provider_options` bucket onto the WS URL's
+/// query string. Vendor key = route-id first dot segment, matching the HTTP
+/// adapters' body merge, so only the bucket for the route that actually runs
+/// is applied. Scalar values only (string/number/bool); nested values are a
+/// config error — same strictness as the JSON-body merge.
+fn merge_ws_query_provider_options(
+    url: &mut url::Url,
+    route: &Route,
+    req: &ScrapeRequest,
+) -> Result<(), FetchError> {
+    if req.provider_options.is_empty() {
+        return Ok(());
+    }
+    let vendor = route.id.split('.').next().unwrap_or(route.id.as_ref());
+    let Some(opts) = req.provider_options.get(vendor) else {
+        return Ok(());
+    };
+    let serde_json::Value::Object(opts) = opts else {
+        return Err(FetchError::Config(format!(
+            "provider_options.{vendor} must be a JSON object"
+        )));
+    };
+    if opts.is_empty() {
+        return Ok(());
+    }
+
+    let mut pairs: Vec<(String, String)> = Vec::with_capacity(opts.len());
+    for (k, v) in opts {
+        let value = match v {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Number(n) => n.to_string(),
+            serde_json::Value::Bool(b) => b.to_string(),
+            _ => {
+                return Err(FetchError::Config(format!(
+                    "provider_options.{vendor}.{k} must be a scalar for CDP WS-URL vendors"
+                )))
+            }
+        };
+        pairs.push((k.clone(), value));
+    }
+
+    // Rebuild the query so caller keys REPLACE same-named pairs.
+    let existing: Vec<(String, String)> = url
+        .query_pairs()
+        .filter(|(k, _)| !pairs.iter().any(|(nk, _)| nk == k.as_ref()))
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    {
+        let mut qp = url.query_pairs_mut();
+        qp.clear();
+        for (k, v) in existing.iter().chain(pairs.iter()) {
+            qp.append_pair(k, v);
+        }
+    }
+    Ok(())
 }
 
 // ===========================================================================
@@ -509,17 +618,15 @@ impl Adapter for KernelCdpAdapter {
         // ---- 4. Release the session OFF the response critical path. Kernel
         // bills per running second, so we still fire the DELETE — but spawned,
         // not awaited, so a slow release can't push the response past the ALB
-        // timeout. If the task is dropped, Kernel's own `timeout_seconds` reaps
-        // the session anyway.
-        {
-            let (http, url, sid, key) = (
-                self.http.clone(),
-                create_url.clone(),
-                session.session_id.clone(),
-                api_key.clone(),
-            );
-            tokio::spawn(async move { delete_kernel_browser(&http, &url, &sid, &key).await });
-        }
+        // timeout. The spawned task retries once and logs on final failure
+        // (see `release_kernel_browser`); if even the task is dropped,
+        // Kernel's own `timeout_seconds` reaps the session.
+        tokio::spawn(release_kernel_browser(
+            self.http.clone(),
+            create_url.clone(),
+            session.session_id.clone(),
+            api_key.clone(),
+        ));
 
         let (status, html) = driven?;
         if status >= 400 {
@@ -569,7 +676,10 @@ const KERNEL_CONTROL_KEYS: &[&str] = &["spider"];
 /// `gpu`, pin a `proxy_id`, set a `viewport`, raise `timeout_seconds`, etc.
 /// Adapter-control flags ([`KERNEL_CONTROL_KEYS`]) are stripped so they never
 /// reach Kernel's API.
-fn build_kernel_create_body(req: &ScrapeRequest, defaults: &serde_json::Value) -> serde_json::Value {
+fn build_kernel_create_body(
+    req: &ScrapeRequest,
+    defaults: &serde_json::Value,
+) -> serde_json::Value {
     let mut body = defaults.clone();
     if let (Some(serde_json::Value::Object(opts)), serde_json::Value::Object(base)) =
         (req.provider_options.get("kernel"), &mut body)
@@ -697,18 +807,71 @@ async fn fetch_kernel_cost_dollars(
     Some(kernel_cost_dollars(uptime_ms, headless, gpu, rates))
 }
 
-/// `DELETE {create_url}/{session_id}` — best-effort, short-bounded. Errors are
-/// swallowed: a failed release can't fail a scrape that already succeeded, and
-/// Kernel reaps the session on its own `timeout_seconds` anyway.
+/// In-flight Kernel session releases — incremented when a release task starts,
+/// decremented when it finishes (either outcome). A host can poll
+/// [`kernel_releases_inflight`] to prove releases aren't piling up: Kernel
+/// bills per running second, so a stuck release is a money leak, not just a
+/// task leak.
+static KERNEL_RELEASES_INFLIGHT: AtomicU64 = AtomicU64::new(0);
+
+/// Kernel session releases that failed even after the retry — each one leaves
+/// a session billing until Kernel's own `timeout_seconds` reaper fires. This
+/// crate carries no logging dependency (errors surface through return values),
+/// so the counter is the host's alerting hook.
+static KERNEL_RELEASE_FAILURES: AtomicU64 = AtomicU64::new(0);
+
+/// Current number of in-flight Kernel session-release tasks (see
+/// [`KERNEL_RELEASES_INFLIGHT`]). Surfaced for host observability endpoints.
+pub fn kernel_releases_inflight() -> u64 {
+    KERNEL_RELEASES_INFLIGHT.load(Ordering::Relaxed)
+}
+
+/// Total Kernel session releases that failed after retry (see
+/// [`KERNEL_RELEASE_FAILURES`]). Monotonic; a moving value means money is
+/// leaking to the Kernel reaper window and warrants a look at connectivity.
+pub fn kernel_release_failures() -> u64 {
+    KERNEL_RELEASE_FAILURES.load(Ordering::Relaxed)
+}
+
+/// `DELETE {create_url}/{session_id}` — short-bounded; returns whether Kernel
+/// acknowledged the release. A failed release can't fail a scrape that already
+/// succeeded, and Kernel reaps the session on its own `timeout_seconds` anyway
+/// — but callers retry once because every second until the reaper fires bills.
 async fn delete_kernel_browser(
     http: &reqwest::Client,
     create_url: &str,
     session_id: &str,
     api_key: &str,
-) {
+) -> bool {
     let url = format!("{}/{}", create_url.trim_end_matches('/'), session_id);
     let fut = http.delete(&url).bearer_auth(api_key).send();
-    let _ = tokio::time::timeout(Duration::from_secs(10), fut).await;
+    match tokio::time::timeout(Duration::from_secs(10), fut).await {
+        Ok(Ok(resp)) => resp.status().is_success() || resp.status().as_u16() == 404,
+        _ => false,
+    }
+}
+
+/// Release a Kernel session with one retry. Runs inside the spawned release
+/// task (off the response critical path); the gauge brackets the whole
+/// attempt so hosts can observe pile-ups.
+async fn release_kernel_browser(
+    http: reqwest::Client,
+    create_url: String,
+    session_id: String,
+    api_key: String,
+) {
+    KERNEL_RELEASES_INFLIGHT.fetch_add(1, Ordering::Relaxed);
+    let ok = delete_kernel_browser(&http, &create_url, &session_id, &api_key).await || {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        delete_kernel_browser(&http, &create_url, &session_id, &api_key).await
+    };
+    if !ok {
+        // No logging dep in this crate — the counter is the observability
+        // surface. The session keeps billing until Kernel's timeout_seconds
+        // reaper fires; hosts should alert on this moving.
+        KERNEL_RELEASE_FAILURES.fetch_add(1, Ordering::Relaxed);
+    }
+    KERNEL_RELEASES_INFLIGHT.fetch_sub(1, Ordering::Relaxed);
 }
 
 /// Default Kernel driver: scrape `target_url` through `spider::Website`,
@@ -815,6 +978,7 @@ mod tests {
             concurrency: 4,
             retry_on: Default::default(),
             cost_extract: None,
+            geo_map: None,
         }
     }
 

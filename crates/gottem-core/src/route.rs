@@ -72,6 +72,19 @@ pub struct Route {
     /// Unset routes use the static `cost` field as the only signal.
     #[serde(default)]
     pub cost_extract: Option<CostExtract>,
+
+    /// Optional geo/country mapping: how this vendor accepts a target country
+    /// for [`ScrapeRequest::geo`](crate::request::ScrapeRequest::geo). Each
+    /// vendor names its country parameter differently (`proxy_country`,
+    /// `geo_location`, `country_code`, …), so the mapping is per-route data,
+    /// not template syntax — a route without one simply never sees `geo`.
+    /// Routes that declare a mapping should also set `caps.geo = true` so the
+    /// ladder can require geo-capable routes when a request sets `geo`.
+    ///
+    /// TOML: `[route.geo] kind = "query" | "body", param = "<vendor param>",
+    /// case = "lower" | "upper" (default lower)`.
+    #[serde(default, rename = "geo")]
+    pub geo_map: Option<GeoSpec>,
 }
 
 fn default_method() -> HttpMethod {
@@ -350,6 +363,50 @@ fn default_unit() -> String {
 
 fn default_multiplier() -> f64 {
     1.0
+}
+
+/// Where a vendor accepts the target country parameter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeoParamKind {
+    /// Appended to the rendered endpoint URL as `?param=<geo>`.
+    Query,
+    /// Inserted as a top-level string field into the JSON request body.
+    Body,
+}
+
+/// Letter case the vendor expects for the country value. gottem normalizes
+/// caller input to lowercase ISO-3166-1 alpha-2; some vendors want uppercase.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeoCase {
+    #[default]
+    Lower,
+    Upper,
+}
+
+/// Declarative per-route mapping from [`ScrapeRequest::geo`] to the vendor's
+/// country parameter — see [`Route::geo_map`]. Mirrors the [`CostExtract`]
+/// pattern: pure data the adapters interpret, no template syntax.
+///
+/// [`ScrapeRequest::geo`]: crate::request::ScrapeRequest::geo
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoSpec {
+    pub kind: GeoParamKind,
+    /// The vendor's parameter name (`proxy_country`, `geo_location`, …).
+    pub param: String,
+    #[serde(default)]
+    pub case: GeoCase,
+}
+
+impl GeoSpec {
+    /// The country value formatted the way this vendor expects.
+    pub fn format_value(&self, geo: &str) -> String {
+        match self.case {
+            GeoCase::Lower => geo.to_ascii_lowercase(),
+            GeoCase::Upper => geo.to_ascii_uppercase(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

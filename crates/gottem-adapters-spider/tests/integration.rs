@@ -34,6 +34,7 @@ fn route_for(server_url: &str) -> Route {
         concurrency: 4,
         retry_on: Default::default(),
         cost_extract: None,
+        geo_map: None,
     }
 }
 
@@ -279,6 +280,7 @@ fn local_route(server_url: &str) -> Route {
         concurrency: 4,
         retry_on: Default::default(),
         cost_extract: None,
+        geo_map: None,
     }
 }
 
@@ -301,6 +303,7 @@ fn crawl_route() -> Route {
         concurrency: 4,
         retry_on: Default::default(),
         cost_extract: None,
+        geo_map: None,
     }
 }
 

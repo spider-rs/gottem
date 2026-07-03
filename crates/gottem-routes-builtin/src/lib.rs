@@ -70,6 +70,10 @@ pub fn register_all(builder: RouteCatalogBuilder) -> Result<RouteCatalogBuilder,
     {
         b = add_scrapingbee(b)?;
     }
+    #[cfg(feature = "scraperapi")]
+    {
+        b = add_scraperapi(b)?;
+    }
     #[cfg(feature = "brightdata-browser")]
     {
         b = add_brightdata_browser(b)?;
@@ -173,6 +177,14 @@ pub fn add_zenrows(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchE
 #[cfg(feature = "scrapingbee")]
 pub fn add_scrapingbee(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
     b.add_toml(include_str!("../routes/scrapingbee.toml"))
+}
+
+/// ScraperAPI — GET with query-string auth via endpoint templating. 4 routes
+/// T4–T7 (basic / js / premium+geo / ultra_premium). Requires env var
+/// `SCRAPERAPI_KEY`.
+#[cfg(feature = "scraperapi")]
+pub fn add_scraperapi(b: RouteCatalogBuilder) -> Result<RouteCatalogBuilder, FetchError> {
+    b.add_toml(include_str!("../routes/scraperapi.toml"))
 }
 
 /// Brightdata Scraping Browser — CDP, WsUserinfo auth. One route at T8.
@@ -287,6 +299,8 @@ pub mod embedded {
     pub const ZENROWS: &str = include_str!("../routes/zenrows.toml");
     #[cfg(feature = "scrapingbee")]
     pub const SCRAPINGBEE: &str = include_str!("../routes/scrapingbee.toml");
+    #[cfg(feature = "scraperapi")]
+    pub const SCRAPERAPI: &str = include_str!("../routes/scraperapi.toml");
     #[cfg(feature = "brightdata-browser")]
     pub const BRIGHTDATA_BROWSER: &str = include_str!("../routes/brightdata_browser.toml");
     #[cfg(feature = "browserless")]

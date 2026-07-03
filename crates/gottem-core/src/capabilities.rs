@@ -8,8 +8,16 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct Capabilities {
     pub js: bool,
+    /// Exits through a residential / consumer-ISP proxy pool.
     pub residential: bool,
+    /// Exits through a shared **datacenter** proxy pool — i.e. the vendor
+    /// fetches from its own infrastructure IPs, never the caller's. Distinct
+    /// from `residential`: a request can require "any proxy, datacenter is
+    /// fine" without paying residential rates.
     pub datacenter_proxy: bool,
+    /// The route can target a specific country — set on routes that declare a
+    /// [`GeoSpec`](crate::route::GeoSpec) mapping, so a request carrying
+    /// `geo` only ladders onto routes that will actually honor it.
     pub geo: bool,
     pub captcha: bool,
     pub stealth: bool,

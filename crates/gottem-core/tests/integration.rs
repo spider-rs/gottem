@@ -7,9 +7,8 @@
 //! - Budget ceiling halts escalation (cost cap)
 //! - Outer CancelToken aborts in-flight fetches promptly
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -22,10 +21,12 @@ use gottem_core::{
 use url::Url;
 
 /// In-memory adapter for tests. Per-route status + body overrides; default success.
+/// DashMap (not Mutex) — the workspace-wide no-mutex invariant is lint-enforced
+/// even in tests.
 #[derive(Default)]
 struct MockAdapter {
-    behavior: Mutex<HashMap<String, (u16, Vec<u8>)>>,
-    delay_per_route: Mutex<HashMap<String, u64>>,
+    behavior: gottem_core::DashMap<String, (u16, Vec<u8>)>,
+    delay_per_route: gottem_core::DashMap<String, u64>,
     calls: AtomicUsize,
     delay_ms: AtomicUsize,
 }
@@ -36,18 +37,13 @@ impl MockAdapter {
     }
 
     fn set(&self, id: &str, status: u16, body: &[u8]) {
-        self.behavior
-            .lock()
-            .unwrap()
-            .insert(id.into(), (status, body.to_vec()));
+        self.behavior.insert(id.into(), (status, body.to_vec()));
     }
 
     fn behavior_for(&self, id: &str) -> (u16, Vec<u8>) {
         self.behavior
-            .lock()
-            .unwrap()
             .get(id)
-            .cloned()
+            .map(|e| e.value().clone())
             .unwrap_or_else(|| {
                 (
                     200,
@@ -58,15 +54,13 @@ impl MockAdapter {
     }
 
     fn set_delay(&self, id: &str, ms: u64) {
-        self.delay_per_route.lock().unwrap().insert(id.into(), ms);
+        self.delay_per_route.insert(id.into(), ms);
     }
 
     fn delay_for(&self, id: &str) -> u64 {
         self.delay_per_route
-            .lock()
-            .unwrap()
             .get(id)
-            .copied()
+            .map(|e| *e.value())
             .unwrap_or_else(|| self.delay_ms.load(Ordering::Relaxed) as u64)
     }
 }
@@ -135,6 +129,7 @@ fn route(id: &str, tier: Tier, cost: u64) -> Route {
         concurrency: 8,
         retry_on: Default::default(),
         cost_extract: None,
+        geo_map: None,
     }
 }
 
@@ -525,4 +520,88 @@ n = 500
     assert_eq!(r.cost, 10);
     assert_eq!(r.timeout_ms, 30_000);
     assert_eq!(r.concurrency, 20);
+}
+
+// ---- required_caps routing --------------------------------------------------
+
+/// Build a catalog with a datacenter T4 route (no caps) and a residential+geo
+/// T6 route, then verify the ladder only picks cap-satisfying routes.
+fn caps_harness() -> Harness {
+    let mut resi = route("cloud.residential", Tier::T6, 75);
+    resi.caps = Capabilities {
+        residential: true,
+        geo: true,
+        ..Capabilities::default()
+    };
+    let catalog = Arc::new(
+        RouteCatalogBuilder::new()
+            .add(route("cloud.basic", Tier::T4, 10))
+            .add(resi)
+            .build(),
+    );
+    let mock = MockAdapter::new();
+    let mut reg = AdapterRegistry::new();
+    reg.register(mock.clone() as Arc<dyn Adapter>);
+    let orch = Arc::new(Orchestrator::new(
+        catalog.clone(),
+        Arc::new(reg),
+        Arc::new(Budget::new(10_000)),
+    ));
+    Harness {
+        orch,
+        catalog,
+        mock,
+    }
+}
+
+#[tokio::test]
+async fn ladder_requiring_residential_skips_datacenter_routes() {
+    let h = caps_harness();
+    let strategy = Arc::new(LadderStrategy::new(
+        h.catalog.clone(),
+        Tier::T0,
+        Tier::T9,
+        Capabilities {
+            residential: true,
+            ..Capabilities::default()
+        },
+        5,
+    ));
+    let mut req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
+    req.required_caps.residential = true;
+    let resp = h
+        .orch
+        .fetch(req, strategy, CancelToken::new())
+        .await
+        .expect("residential route should satisfy");
+    assert_eq!(resp.route_id.as_ref(), "cloud.residential");
+    assert_eq!(resp.tier, Tier::T6);
+}
+
+#[tokio::test]
+async fn ladder_requiring_unavailable_cap_exhausts() {
+    let h = caps_harness();
+    let strategy = Arc::new(LadderStrategy::new(
+        h.catalog.clone(),
+        Tier::T0,
+        Tier::T9,
+        Capabilities {
+            captcha: true,
+            ..Capabilities::default()
+        },
+        5,
+    ));
+    let mut req = ScrapeRequest::get(Url::parse("https://example.test/").unwrap());
+    req.required_caps.captcha = true;
+    let err = h
+        .orch
+        .fetch(req, strategy, CancelToken::new())
+        .await
+        .expect_err("no captcha-capable route exists");
+    assert!(matches!(err, FetchError::Exhausted));
+    assert_eq!(
+        h.mock.calls.load(Ordering::Relaxed),
+        0,
+        "no route should even be attempted"
+    );
 }

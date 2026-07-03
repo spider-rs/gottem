@@ -37,6 +37,7 @@ fn base_route(server: &MockServer, adapter: AdapterKind, parse: ResponseParse) -
         concurrency: 4,
         retry_on: Default::default(),
         cost_extract: None,
+        geo_map: None,
     }
 }
 
@@ -448,6 +449,7 @@ fn crawl_route(server: &MockServer) -> Route {
         concurrency: 4,
         retry_on: Default::default(),
         cost_extract: None,
+            geo_map: None,
     }
 }
 

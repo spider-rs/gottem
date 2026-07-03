@@ -35,3 +35,10 @@ n    = 500
 js          = true
 residential = true
 stealth     = true
+geo         = true
+
+# Brightdata Web Unlocker geo-targeting: `country` body field (lowercase
+# ISO-2). The zone must have country targeting enabled.
+[route.geo]
+kind  = "body"
+param = "country"

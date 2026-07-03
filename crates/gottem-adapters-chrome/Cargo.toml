@@ -41,6 +41,12 @@ futures-util = { workspace = true }
 reqwest      = { workspace = true, features = ["json", "rustls", "http2"] }
 serde_json   = { workspace = true }
 
+[dev-dependencies]
+# Lifecycle tests: wiremock stands in for Kernel's REST API (create/delete),
+# same pattern as gottem-adapters-http's integration tests.
+wiremock = "0.6"
+tokio    = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+
 [features]
 default = []
 
@@ -49,3 +55,4 @@ unsafe_code = "forbid"
 
 [lints.clippy]
 await_holding_lock = "deny"
+disallowed_types   = "deny"

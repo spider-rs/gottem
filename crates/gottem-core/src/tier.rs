@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 /// | Tier | Typical providers | Cost ⁄ page |
 /// |------|-------------------|-------------|
 /// | T0   | Direct reqwest                                         | $0         |
-/// | T1   | reqwest + datacenter proxy rotation                    | $0.0001    |
-/// | T2   | reqwest + residential proxy rotation                   | $0.001     |
+/// | T1   | *reserved* — reqwest + datacenter proxy rotation ¹     | $0.0001    |
+/// | T2   | *reserved* — reqwest + residential proxy rotation ¹    | $0.001     |
 /// | T3   | Local Chrome (chromiumoxide, spider::Website)          | $0 compute |
 /// | T4   | Spider HTTP, Firecrawl basic                     | $0.001     |
 /// | T5   | Spider Chrome, Firecrawl JS, ScrapingBee         | $0.005     |
@@ -17,6 +17,13 @@ use serde::{Deserialize, Serialize};
 /// | T7   | Spider Smart Unblocker, Brightdata Unblocker, Zyte     | $0.01      |
 /// | T8   | Brightdata Scraping Browser, Browserless CDP           | $0.015     |
 /// | T9   | Oxylabs, Apify actors, CAPTCHA solver chains           | $0.05+     |
+///
+/// ¹ T1/T2 ship **no builtin route** — the `spider_local` adapter's default
+/// client carries no proxy. To wire them, construct the adapter with a
+/// proxied client (`SpiderAdapter::with_client` /
+/// `SpiderAdapter::arc_with_client`) and register T1/T2 routes via a user
+/// TOML (`GOTTEM_ROUTES_TOML`) or `RouteCatalogBuilder::add`. Until then the
+/// ladder's first proxy class is the T4 vendor-datacenter routes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "u8", into = "u8")]
 #[repr(u8)]

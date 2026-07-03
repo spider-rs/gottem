@@ -32,6 +32,9 @@ unit = "credits"
 kind = "min_bytes"
 n    = 500
 
+[route.caps]
+datacenter_proxy = true
+
 # ----------------------------------------------------------------------------
 # T5 — JS render.
 # ----------------------------------------------------------------------------
@@ -58,7 +61,8 @@ kind = "min_bytes"
 n    = 500
 
 [route.caps]
-js = true
+js               = true
+datacenter_proxy = true
 
 # ----------------------------------------------------------------------------
 # T6 — JS render + premium (residential) proxy.
@@ -88,3 +92,10 @@ n    = 500
 [route.caps]
 js          = true
 residential = true
+geo         = true
+
+# ZenRows geo-targeting: `proxy_country` query param (lowercase ISO-2);
+# requires premium_proxy=true, which this route already sets.
+[route.geo]
+kind  = "query"
+param = "proxy_country"

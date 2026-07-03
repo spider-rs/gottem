@@ -29,6 +29,9 @@ unit = "credits"
 kind = "min_bytes"
 n    = 500
 
+[route.caps]
+datacenter_proxy = true
+
 # ----------------------------------------------------------------------------
 # T5 — JS render via Chrome.
 # ----------------------------------------------------------------------------
@@ -55,7 +58,8 @@ kind = "min_bytes"
 n    = 500
 
 [route.caps]
-js = true
+js               = true
+datacenter_proxy = true
 
 # ----------------------------------------------------------------------------
 # T6 — JS render + premium (residential) proxy.
@@ -85,3 +89,10 @@ n    = 500
 [route.caps]
 js          = true
 residential = true
+geo         = true
+
+# ScrapingBee geo-targeting: `country_code` query param (lowercase ISO-2);
+# premium-proxy-only feature — this route already sets premium_proxy=true.
+[route.geo]
+kind  = "query"
+param = "country_code"

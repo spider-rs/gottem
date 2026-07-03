@@ -45,6 +45,9 @@ unit = "credits"
 kind = "min_bytes"
 n    = 500
 
+[route.caps]
+datacenter_proxy = true
+
 # ----------------------------------------------------------------------------
 # T5 — Chrome rendering, datacenter IPs.
 # ----------------------------------------------------------------------------
@@ -84,7 +87,8 @@ kind = "min_bytes"
 n    = 500
 
 [route.caps]
-js = true
+js               = true
+datacenter_proxy = true
 
 # ----------------------------------------------------------------------------
 # T6 — Chrome + residential proxy.
@@ -127,6 +131,13 @@ n    = 500
 [route.caps]
 js          = true
 residential = true
+geo         = true
+
+# Spider takes the target country as `country_code` on the request body
+# (lowercase ISO-3166-1 alpha-2). Residential pool honors geo-targeting.
+[route.geo]
+kind  = "body"
+param = "country_code"
 
 # ----------------------------------------------------------------------------
 # T7 — Smart unblocker. Spider's own escalation ladder.
@@ -171,6 +182,13 @@ n    = 500
 js          = true
 residential = true
 stealth     = true
+geo         = true
+
+# Same body-level `country_code` mapping as spider.chrome.residential — smart
+# mode escalates internally but still honors the geo pin.
+[route.geo]
+kind  = "body"
+param = "country_code"
 
 # ----------------------------------------------------------------------------
 # T4 — /crawl. Streams JSONL across many pages from one POST. Used by

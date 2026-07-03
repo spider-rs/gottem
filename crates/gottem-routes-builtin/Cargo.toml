@@ -20,6 +20,7 @@ brightdata         = []
 zyte               = []
 zenrows            = []
 scrapingbee        = []
+scraperapi         = []
 brightdata-browser = []
 browserless        = []
 spider-browser     = []
@@ -34,6 +35,7 @@ dataforseo         = []
 kernel             = []
 all = [
     "spider-cloud", "firecrawl", "brightdata", "zyte", "zenrows", "scrapingbee",
+    "scraperapi",
     "brightdata-browser", "browserless", "spider-browser",
     "apify", "oxylabs", "two-captcha",
     "browserbase", "browser-use",
@@ -42,3 +44,7 @@ all = [
 
 [lints.rust]
 unsafe_code = "forbid"
+
+[lints.clippy]
+await_holding_lock = "deny"
+disallowed_types   = "deny"

@@ -248,13 +248,17 @@ impl Orchestrator {
         let max_retries = strategy.max_retries();
         let budget = self.request_budget(&req);
 
-        let mut current_route = match self.stats.promoted_route(&req.url, &self.catalog) {
-            Some(promoted) => promoted,
-            None => match strategy.initial() {
-                Some(r) => r,
-                None => return Err(FetchError::Exhausted),
-            },
-        };
+        let mut current_route =
+            match self
+                .stats
+                .promoted_route_satisfying(&req.url, &self.catalog, &req.required_caps)
+            {
+                Some(promoted) => promoted,
+                None => match strategy.initial() {
+                    Some(r) => r,
+                    None => return Err(FetchError::Exhausted),
+                },
+            };
 
         let mut attempt: u32 = 0;
         let mut last_err: Option<FetchError> = None;

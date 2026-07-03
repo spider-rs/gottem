@@ -33,3 +33,4 @@ unsafe_code = "forbid"
 
 [lints.clippy]
 await_holding_lock = "deny"
+disallowed_types   = "deny"

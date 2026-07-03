@@ -4,10 +4,11 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use gottem_core::{
-    templating, AuthSpec, BodyTemplate, CancelToken, CostExtract, FetchError, HttpMethod,
-    ResponseParse, Route, ScrapeRequest,
+    templating, AuthSpec, BodyTemplate, CancelToken, CostExtract, FetchError, GeoParamKind,
+    HttpMethod, ResponseParse, Route, ScrapeRequest,
 };
 use reqwest::{Client, Method, RequestBuilder};
+use url::Url;
 
 /// Full outcome of an HTTP send: status, raw headers (lowercased keys), body.
 /// Replaces the older `(u16, Bytes)` tuple so cost-extraction adapters can read headers.
@@ -103,41 +104,138 @@ pub fn render_body(body: &BodyTemplate, req: &ScrapeRequest) -> Result<Option<By
     }
 }
 
-/// Render a route's JSON body, then layer the caller's per-vendor
+/// Render a route's JSON body, apply the route's body-kind geo mapping, then
+/// layer the caller's per-vendor
 /// [`provider_options`](ScrapeRequest::provider_options) over it. The vendor
 /// key is the route-id prefix (`"firecrawl.scrape"` → `"firecrawl"`), so only
 /// the bucket for the route that actually runs is applied — a vendor-specific
-/// option never reaches a different vendor when the ladder fails over. The
-/// caller's keys win over the route template's defaults. Empty/non-object
-/// bodies pass through unchanged.
+/// option never reaches a different vendor when the ladder fails over. Merge
+/// order is geo **then** provider_options, so an explicit caller option wins
+/// over the geo-derived default too. Empty/non-object bodies pass through
+/// unchanged.
 pub fn render_json_body(route: &Route, req: &ScrapeRequest) -> Result<Option<Bytes>, FetchError> {
     let Some(bytes) = render_body(&route.body, req)? else {
         return Ok(None);
     };
-    if req.provider_options.is_empty() {
+
+    let geo_insert = match (&route.geo_map, &req.geo) {
+        (Some(spec), Some(geo)) if spec.kind == GeoParamKind::Body => {
+            Some((spec.param.clone(), spec.format_value(geo)))
+        }
+        _ => None,
+    };
+    if req.provider_options.is_empty() && geo_insert.is_none() {
         return Ok(Some(bytes));
     }
+
     let vendor = route.id.split('.').next().unwrap_or(route.id.as_ref());
-    let Some(opts) = req.provider_options.get(vendor) else {
+    let opts = match req.provider_options.get(vendor) {
+        Some(serde_json::Value::Object(opts)) => Some(opts),
+        Some(_) => {
+            return Err(FetchError::Config(format!(
+                "provider_options.{vendor} must be a JSON object"
+            )))
+        }
+        None => None,
+    };
+    if opts.is_none() && geo_insert.is_none() {
         return Ok(Some(bytes));
-    };
-    let serde_json::Value::Object(opts) = opts else {
-        return Err(FetchError::Config(format!(
-            "provider_options.{vendor} must be a JSON object"
-        )));
-    };
+    }
+
     let mut doc: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|e| FetchError::Config(format!("route body is not JSON: {e}")))?;
     let serde_json::Value::Object(doc_map) = &mut doc else {
         // Body isn't a JSON object — nothing to merge into; send it as-is.
         return Ok(Some(bytes));
     };
-    for (k, v) in opts {
-        doc_map.insert(k.clone(), v.clone());
+    if let Some((param, value)) = geo_insert {
+        doc_map.insert(param, serde_json::Value::String(value));
+    }
+    if let Some(opts) = opts {
+        for (k, v) in opts {
+            doc_map.insert(k.clone(), v.clone());
+        }
     }
     let merged = serde_json::to_vec(&doc)
         .map_err(|e| FetchError::Config(format!("re-serialize vendor body: {e}")))?;
     Ok(Some(Bytes::from(merged)))
+}
+
+/// Apply the route's **query-kind** geo mapping to a rendered endpoint URL:
+/// appends `param=<country>` when the request carries `geo` and the route
+/// declares a `[route.geo] kind = "query"` mapping. No-op otherwise — a route
+/// without a mapping never sees `geo`, which is why geo-carrying requests
+/// should also require `caps.geo` so the ladder skips unmapped routes.
+pub fn apply_geo_query(url: &mut Url, route: &Route, req: &ScrapeRequest) {
+    if let (Some(spec), Some(geo)) = (&route.geo_map, &req.geo) {
+        if spec.kind == GeoParamKind::Query {
+            url.query_pairs_mut()
+                .append_pair(&spec.param, &spec.format_value(geo));
+        }
+    }
+}
+
+/// Merge the caller's per-vendor [`provider_options`] onto a URL's query
+/// string — the query-parameter twin of [`render_json_body`]'s body merge,
+/// for vendors whose native options ride the URL (ZenRows, ScrapingBee,
+/// ScraperAPI on `direct_http`; Browserless/Browserbase on WS URLs). Scalar
+/// values only (string/number/bool); nested objects or arrays are a config
+/// error, matching the body merge's strictness. A caller's value replaces an
+/// existing same-named pair, so callers can override the route template's
+/// baked-in flags.
+///
+/// [`provider_options`]: ScrapeRequest::provider_options
+pub fn merge_query_provider_options(
+    url: &mut Url,
+    route: &Route,
+    req: &ScrapeRequest,
+) -> Result<(), FetchError> {
+    if req.provider_options.is_empty() {
+        return Ok(());
+    }
+    let vendor = route.id.split('.').next().unwrap_or(route.id.as_ref());
+    let Some(opts) = req.provider_options.get(vendor) else {
+        return Ok(());
+    };
+    let serde_json::Value::Object(opts) = opts else {
+        return Err(FetchError::Config(format!(
+            "provider_options.{vendor} must be a JSON object"
+        )));
+    };
+    if opts.is_empty() {
+        return Ok(());
+    }
+
+    let mut pairs: Vec<(String, String)> = Vec::with_capacity(opts.len());
+    for (k, v) in opts {
+        let value = match v {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Number(n) => n.to_string(),
+            serde_json::Value::Bool(b) => b.to_string(),
+            _ => {
+                return Err(FetchError::Config(format!(
+                    "provider_options.{vendor}.{k} must be a scalar for query-param vendors"
+                )))
+            }
+        };
+        pairs.push((k.clone(), value));
+    }
+
+    // Rebuild the query so caller keys REPLACE same-named existing pairs
+    // rather than duplicating them.
+    let existing: Vec<(String, String)> = url
+        .query_pairs()
+        .filter(|(k, _)| !pairs.iter().any(|(nk, _)| nk == k.as_ref()))
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    {
+        let mut qp = url.query_pairs_mut();
+        qp.clear();
+        for (k, v) in existing.iter().chain(pairs.iter()) {
+            qp.append_pair(k, v);
+        }
+    }
+    Ok(())
 }
 
 /// Parse content **and** extract cost from one response, deserializing the body's JSON
@@ -495,6 +593,131 @@ mod tests {
         let content = content.expect("html parse always produces content");
         assert_eq!(content.as_ptr(), body.as_ptr(), "expected shared buffer");
         assert_eq!(content.len(), body.len());
+    }
+
+    fn geo_route(kind: gottem_core::GeoParamKind, param: &str) -> Route {
+        let toml_kind = match kind {
+            gottem_core::GeoParamKind::Query => "query",
+            gottem_core::GeoParamKind::Body => "body",
+        };
+        let toml = format!(
+            r#"
+[[route]]
+id       = "vendor.test"
+adapter  = "direct_http"
+endpoint = "https://api.vendor.test/?url={{{{url}}}}"
+tier     = 4
+
+[route.body]
+kind     = "json"
+template = '{{"url":"{{{{url}}}}"}}'
+
+[route.caps]
+geo = true
+
+[route.geo]
+kind  = "{toml_kind}"
+param = "{param}"
+"#
+        );
+        let catalog = gottem_core::RouteCatalogBuilder::new()
+            .add_toml(&toml)
+            .expect("route parses")
+            .build();
+        catalog.get("vendor.test").unwrap().as_ref().clone()
+    }
+
+    fn req_with_geo(geo: Option<&str>) -> ScrapeRequest {
+        let mut req = ScrapeRequest::get(url::Url::parse("https://example.com").unwrap());
+        req.geo = geo.map(str::to_string);
+        req
+    }
+
+    #[test]
+    fn apply_geo_query_appends_country_param() {
+        let route = geo_route(gottem_core::GeoParamKind::Query, "proxy_country");
+        let req = req_with_geo(Some("DE"));
+        let mut url = route.endpoint.render(&req).unwrap();
+        apply_geo_query(&mut url, &route, &req);
+        assert!(url.query().unwrap().contains("proxy_country=de"));
+    }
+
+    #[test]
+    fn apply_geo_query_noop_without_geo_or_mapping() {
+        let route = geo_route(gottem_core::GeoParamKind::Query, "proxy_country");
+        let req = req_with_geo(None);
+        let mut url = route.endpoint.render(&req).unwrap();
+        let before = url.to_string();
+        apply_geo_query(&mut url, &route, &req);
+        assert_eq!(url.to_string(), before, "no geo on request → untouched");
+
+        // Body-kind mapping must not leak into the query string.
+        let body_route = geo_route(gottem_core::GeoParamKind::Body, "country_code");
+        let req = req_with_geo(Some("de"));
+        let mut url = body_route.endpoint.render(&req).unwrap();
+        let before = url.to_string();
+        apply_geo_query(&mut url, &body_route, &req);
+        assert_eq!(url.to_string(), before);
+    }
+
+    #[test]
+    fn body_geo_inserted_and_provider_options_win() {
+        let route = geo_route(gottem_core::GeoParamKind::Body, "country_code");
+        let mut req = req_with_geo(Some("DE"));
+        let body = render_json_body(&route, &req).unwrap().unwrap();
+        let doc: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(doc["country_code"], "de", "lowercase default casing");
+
+        // An explicit provider_options key overrides the geo-derived value.
+        req.provider_options
+            .insert("vendor".into(), serde_json::json!({ "country_code": "fr" }));
+        let body = render_json_body(&route, &req).unwrap().unwrap();
+        let doc: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(doc["country_code"], "fr", "caller options win over geo");
+    }
+
+    #[test]
+    fn merge_query_provider_options_scalars_and_overrides() {
+        let route = geo_route(gottem_core::GeoParamKind::Query, "proxy_country");
+        let mut req = req_with_geo(None);
+        req.provider_options.insert(
+            "vendor".into(),
+            serde_json::json!({ "wait_for": 2000, "premium": true, "url": "override" }),
+        );
+        let mut url = route.endpoint.render(&req).unwrap();
+        merge_query_provider_options(&mut url, &route, &req).unwrap();
+        let q = url.query().unwrap();
+        assert!(q.contains("wait_for=2000"));
+        assert!(q.contains("premium=true"));
+        assert!(q.contains("url=override"), "caller replaces existing pair");
+        assert_eq!(
+            url.query_pairs().filter(|(k, _)| k == "url").count(),
+            1,
+            "no duplicate pairs"
+        );
+    }
+
+    #[test]
+    fn merge_query_provider_options_rejects_nested_values() {
+        let route = geo_route(gottem_core::GeoParamKind::Query, "proxy_country");
+        let mut req = req_with_geo(None);
+        req.provider_options
+            .insert("vendor".into(), serde_json::json!({ "nested": { "a": 1 } }));
+        let mut url = route.endpoint.render(&req).unwrap();
+        let err = merge_query_provider_options(&mut url, &route, &req).unwrap_err();
+        assert!(matches!(err, FetchError::Config(_)));
+    }
+
+    #[test]
+    fn merge_query_provider_options_ignores_other_vendor_bucket() {
+        let route = geo_route(gottem_core::GeoParamKind::Query, "proxy_country");
+        let mut req = req_with_geo(None);
+        req.provider_options
+            .insert("othervendor".into(), serde_json::json!({ "x": 1 }));
+        let mut url = route.endpoint.render(&req).unwrap();
+        let before = url.to_string();
+        merge_query_provider_options(&mut url, &route, &req).unwrap();
+        assert_eq!(url.to_string(), before, "other vendor's bucket not applied");
     }
 
     #[test]

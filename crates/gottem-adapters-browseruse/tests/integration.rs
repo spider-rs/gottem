@@ -36,6 +36,7 @@ fn browseruse_route() -> Route {
         concurrency: 2,
         retry_on: Default::default(),
         cost_extract: None,
+        geo_map: None,
     }
 }
 

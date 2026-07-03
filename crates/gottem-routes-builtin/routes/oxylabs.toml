@@ -46,3 +46,12 @@ n    = 500
 js          = true
 residential = true
 stealth     = true
+geo         = true
+
+# Oxylabs geo-targeting: `geo_location` body field. The universal source
+# accepts ISO-3166-1 alpha-2 codes uppercased ("US"); some sources also take
+# full country names — verify against the account's enabled sources.
+[route.geo]
+kind  = "body"
+param = "geo_location"
+case  = "upper"

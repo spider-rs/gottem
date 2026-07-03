@@ -153,6 +153,9 @@ fn register_all_succeeds_with_default_features() {
     if cfg!(feature = "scrapingbee") {
         expected += 3;
     }
+    if cfg!(feature = "scraperapi") {
+        expected += 4;
+    }
     if cfg!(feature = "brightdata-browser") {
         expected += 1;
     }
@@ -388,4 +391,79 @@ fn tiers_are_ordered_within_catalog() {
             }
         }
     }
+}
+
+#[cfg(feature = "scraperapi")]
+#[test]
+fn scraperapi_loads_4_routes_tiers_4_through_7() {
+    let catalog = gottem_routes_builtin::add_scraperapi(RouteCatalogBuilder::new())
+        .expect("scraperapi.toml parses")
+        .build();
+    assert_eq!(catalog.len(), 4);
+    let basic = catalog.get("scraperapi.basic").unwrap();
+    assert_eq!(basic.tier, Tier::T4);
+    assert_eq!(basic.adapter, AdapterKind::DirectHttp);
+    assert!(basic.caps.datacenter_proxy);
+    assert!(basic.endpoint.as_str().contains("{{env:SCRAPERAPI_KEY}}"));
+    let js = catalog.get("scraperapi.js").unwrap();
+    assert_eq!(js.tier, Tier::T5);
+    assert!(js.caps.js);
+    let premium = catalog.get("scraperapi.premium").unwrap();
+    assert_eq!(premium.tier, Tier::T6);
+    assert!(premium.caps.residential);
+    assert!(premium.caps.geo);
+    assert!(premium.geo_map.is_some(), "premium declares a geo mapping");
+    let ultra = catalog.get("scraperapi.ultra").unwrap();
+    assert_eq!(ultra.tier, Tier::T7);
+    assert!(ultra.caps.stealth);
+}
+
+#[test]
+fn every_geo_mapped_route_advertises_geo_cap() {
+    // Loader-level invariant: a [route.geo] mapping without caps.geo = true
+    // would let the ladder skip the route when geo is required (silent gap),
+    // and caps.geo without a mapping would admit a route that silently drops
+    // the caller's country. The two must always travel together.
+    let catalog = gottem_routes_builtin::register_all(RouteCatalogBuilder::new())
+        .expect("load")
+        .build();
+    for route in catalog.all() {
+        assert_eq!(
+            route.geo_map.is_some(),
+            route.caps.geo,
+            "route {} has geo mapping/cap mismatch (geo_map: {}, caps.geo: {})",
+            route.id,
+            route.geo_map.is_some(),
+            route.caps.geo,
+        );
+    }
+}
+
+#[test]
+fn geo_query_mapping_deserializes() {
+    use gottem_core::{GeoCase, GeoParamKind};
+    let toml = r#"
+[[route]]
+id       = "test.geo"
+adapter  = "direct_http"
+endpoint = "https://api.example.com/?url={{url}}"
+tier     = 4
+
+[route.caps]
+geo = true
+
+[route.geo]
+kind  = "query"
+param = "proxy_country"
+"#;
+    let catalog = RouteCatalogBuilder::new()
+        .add_toml(toml)
+        .expect("parses")
+        .build();
+    let route = catalog.get("test.geo").unwrap();
+    let spec = route.geo_map.as_ref().expect("geo mapping present");
+    assert_eq!(spec.kind, GeoParamKind::Query);
+    assert_eq!(spec.param, "proxy_country");
+    assert_eq!(spec.case, GeoCase::Lower);
+    assert_eq!(spec.format_value("DE"), "de");
 }

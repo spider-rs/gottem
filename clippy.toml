@@ -1,0 +1,9 @@
+# no-mutex invariant: shared state is DashMap / atomics / channels /
+# tokio::sync::Semaphore. Blocking or async locks are disallowed; a justified
+# exception needs #[allow(clippy::disallowed_types)] with a comment.
+disallowed-types = [
+    { path = "std::sync::Mutex",    reason = "no-mutex invariant: use DashMap / atomics / channels / tokio::sync::Semaphore" },
+    { path = "std::sync::RwLock",   reason = "no-mutex invariant" },
+    { path = "tokio::sync::Mutex",  reason = "no-mutex invariant" },
+    { path = "tokio::sync::RwLock", reason = "no-mutex invariant" },
+]

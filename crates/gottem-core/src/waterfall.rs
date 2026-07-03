@@ -376,11 +376,31 @@ impl WaterfallStats {
     ///
     /// Final score = weighted sum. Highest wins; ties broken by lower cost.
     pub fn promoted_route(&self, url: &Url, catalog: &RouteCatalog) -> Option<Arc<Route>> {
+        self.promoted_route_satisfying(url, catalog, &crate::capabilities::Capabilities::default())
+    }
+
+    /// [`Self::promoted_route`] constrained to routes whose caps satisfy
+    /// `required_caps`. The orchestrator consults promotion *before* the
+    /// retry strategy, so without this filter a domain promoted on a
+    /// cheap datacenter route would be tried first even when the caller
+    /// required `residential` / `geo` / `js` — leaking the wrong proxy class
+    /// on the first attempt.
+    pub fn promoted_route_satisfying(
+        &self,
+        url: &Url,
+        catalog: &RouteCatalog,
+        required_caps: &crate::capabilities::Capabilities,
+    ) -> Option<Arc<Route>> {
         let domain = domain_key_from_url(url);
         let mut cohort: Vec<(Arc<Route>, Arc<RouteDomainEntry>)> = Vec::new();
         for route in catalog.all() {
             // Crawl-kind routes are not eligible for scrape-ladder promotion.
             if route.adapter.is_crawl() {
+                continue;
+            }
+            // A promoted route must still deliver everything the request
+            // demands — promotion is an acceleration, never a downgrade.
+            if !required_caps.satisfied_by(&route.caps) {
                 continue;
             }
             let key = (route.id.clone(), domain);
@@ -531,6 +551,7 @@ mod tests {
             concurrency: 8,
             retry_on: Default::default(),
             cost_extract: None,
+            geo_map: None,
         }
     }
 
@@ -558,6 +579,53 @@ mod tests {
             eviction_sample_size: 16,
             weights: ScoreWeights::default(),
         }
+    }
+
+    #[test]
+    fn promotion_respects_required_caps() {
+        // "basic" (datacenter, no caps) is heavily proven on the domain;
+        // "resi" is residential-capable and also proven. A request requiring
+        // residential must NOT get the promoted datacenter route.
+        let mut resi = route("resi", 100);
+        resi.caps = Capabilities {
+            residential: true,
+            ..Capabilities::default()
+        };
+        let cat = RouteCatalogBuilder::new()
+            .add(route("basic", 10))
+            .add(resi)
+            .build();
+        let stats = WaterfallStats::new(permissive());
+        let url = Url::parse("https://promoted.test/").unwrap();
+        let basic: RouteId = Arc::from("basic");
+        let resi_id: RouteId = Arc::from("resi");
+        for _ in 0..10 {
+            stats.record_success(&basic, &url, 200);
+            stats.record_success(&resi_id, &url, 900);
+        }
+
+        // Unconstrained promotion still picks the cheap datacenter route.
+        let unconstrained = stats.promoted_route(&url, &cat).expect("promote");
+        assert_eq!(unconstrained.id.as_ref(), "basic");
+
+        // Constrained: only the residential route qualifies.
+        let need_resi = Capabilities {
+            residential: true,
+            ..Capabilities::default()
+        };
+        let constrained = stats
+            .promoted_route_satisfying(&url, &cat, &need_resi)
+            .expect("promote within caps");
+        assert_eq!(constrained.id.as_ref(), "resi");
+
+        // A cap nothing provides → no promotion (ladder initial runs instead).
+        let need_captcha = Capabilities {
+            captcha: true,
+            ..Capabilities::default()
+        };
+        assert!(stats
+            .promoted_route_satisfying(&url, &cat, &need_captcha)
+            .is_none());
     }
 
     #[test]

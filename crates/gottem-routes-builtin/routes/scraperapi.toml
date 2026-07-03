@@ -1,0 +1,119 @@
+# ScraperAPI routes — GET requests with api_key + url in query string.
+#
+# Env var: SCRAPERAPI_KEY
+# Endpoint: https://api.scraperapi.com/
+# Docs:     https://docs.scraperapi.com/making-requests/customizing-requests
+#
+# ScraperAPI authenticates via query parameter (`api_key=...`), same shape as
+# ZenRows/ScrapingBee. No reliable per-request cost header is documented, so
+# these routes carry no cost_extract — the static `cost` estimate applies.
+
+# ----------------------------------------------------------------------------
+# T4 — Basic HTTP, no JS, datacenter IPs.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "scraperapi.basic"
+adapter     = "direct_http"
+endpoint    = "https://api.scraperapi.com/?api_key={{env:SCRAPERAPI_KEY}}&url={{url}}"
+method      = "GET"
+tier        = 4
+cost        = 10
+timeout_ms  = 70000             # ScraperAPI docs recommend a 70s client timeout
+concurrency = 20
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+datacenter_proxy = true
+
+# ----------------------------------------------------------------------------
+# T5 — JS render.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "scraperapi.js"
+adapter     = "direct_http"
+endpoint    = "https://api.scraperapi.com/?api_key={{env:SCRAPERAPI_KEY}}&url={{url}}&render=true"
+method      = "GET"
+tier        = 5
+cost        = 50
+timeout_ms  = 70000
+concurrency = 10
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js               = true
+datacenter_proxy = true
+
+# ----------------------------------------------------------------------------
+# T6 — JS render + premium (residential/mobile pool) + geo.
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "scraperapi.premium"
+adapter     = "direct_http"
+endpoint    = "https://api.scraperapi.com/?api_key={{env:SCRAPERAPI_KEY}}&url={{url}}&render=true&premium=true"
+method      = "GET"
+tier        = 6
+cost        = 75
+timeout_ms  = 70000
+concurrency = 8
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+geo         = true
+
+# ScraperAPI geo-targeting: `country_code` query param (lowercase ISO-2).
+[route.geo]
+kind  = "query"
+param = "country_code"
+
+# ----------------------------------------------------------------------------
+# T7 — Ultra-premium: strongest anti-bot bypass pool (~30 credits/request —
+# confirm the account's plan pricing before leaning on the static cost here;
+# the static 100 keeps the catalog's tier-cost ordering with the other T7
+# unlockers rather than modeling the plan-dependent real rate).
+# ----------------------------------------------------------------------------
+[[route]]
+id          = "scraperapi.ultra"
+adapter     = "direct_http"
+endpoint    = "https://api.scraperapi.com/?api_key={{env:SCRAPERAPI_KEY}}&url={{url}}&render=true&ultra_premium=true"
+method      = "GET"
+tier        = 7
+cost        = 100
+timeout_ms  = 70000
+concurrency = 5
+
+[route.parse]
+kind = "raw_text"
+
+[[route.validate]]
+kind = "min_bytes"
+n    = 500
+
+[route.caps]
+js          = true
+residential = true
+stealth     = true
+geo         = true
+
+[route.geo]
+kind  = "query"
+param = "country_code"

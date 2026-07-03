@@ -94,7 +94,8 @@ impl CrawlAdapter for HttpJsonlStreamManyAdapter {
             scrape.extra.entry(k.clone()).or_insert_with(|| v.clone());
         }
 
-        let endpoint = route.endpoint.render(&scrape)?;
+        let mut endpoint = route.endpoint.render(&scrape)?;
+        crate::shared::apply_geo_query(&mut endpoint, route, &scrape);
         let mut builder = self
             .client
             .request(to_reqwest_method(route.method), endpoint)

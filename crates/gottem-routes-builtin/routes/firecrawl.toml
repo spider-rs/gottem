@@ -33,6 +33,9 @@ path = "$.data.markdown"
 kind = "min_bytes"
 n    = 500
 
+[route.caps]
+datacenter_proxy = true
+
 # ----------------------------------------------------------------------------
 # T5 — With JS render. Adds waitFor for client-rendered content.
 # ----------------------------------------------------------------------------
@@ -63,4 +66,5 @@ kind = "min_bytes"
 n    = 500
 
 [route.caps]
-js = true
+js               = true
+datacenter_proxy = true

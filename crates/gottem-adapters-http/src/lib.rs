@@ -49,8 +49,8 @@ pub use jsonl_many::HttpJsonlStreamManyAdapter;
 pub use shared::build_default_client;
 
 use shared::{
-    apply_auth, extract_content_and_cost, render_json_body, send_with_cancel, to_reqwest_method,
-    HttpOutcome,
+    apply_auth, apply_geo_query, extract_content_and_cost, merge_query_provider_options,
+    render_json_body, send_with_cancel, to_reqwest_method, HttpOutcome,
 };
 
 /// Register all three single-page HTTP adapters into a [`AdapterRegistry`], sharing one
@@ -100,7 +100,12 @@ impl Adapter for DirectHttpAdapter {
         ctx: &AdapterContext,
         cancel: &CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
-        let resolved = route.endpoint.render(req)?;
+        let mut resolved = route.endpoint.render(req)?;
+        // direct_http vendors take their native options as query params
+        // (ZenRows/ScrapingBee/ScraperAPI style) — geo first, then the
+        // caller's provider_options so explicit options win.
+        apply_geo_query(&mut resolved, route, req);
+        merge_query_provider_options(&mut resolved, route, req)?;
         let mut builder = self
             .client
             .request(to_reqwest_method(route.method), resolved)
@@ -162,7 +167,8 @@ impl Adapter for HttpJsonAdapter {
         ctx: &AdapterContext,
         cancel: &CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
-        let resolved = route.endpoint.render(req)?;
+        let mut resolved = route.endpoint.render(req)?;
+        apply_geo_query(&mut resolved, route, req);
         let mut builder = self
             .client
             .request(to_reqwest_method(route.method), resolved)
@@ -226,7 +232,8 @@ impl Adapter for HttpJsonlStreamAdapter {
         ctx: &AdapterContext,
         cancel: &CancelToken,
     ) -> Result<ScrapeResponse, FetchError> {
-        let resolved = route.endpoint.render(req)?;
+        let mut resolved = route.endpoint.render(req)?;
+        apply_geo_query(&mut resolved, route, req);
         let mut builder = self
             .client
             .request(to_reqwest_method(route.method), resolved)

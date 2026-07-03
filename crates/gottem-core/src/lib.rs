@@ -77,8 +77,8 @@ pub use retry::{
     AttemptOutcome, LadderStrategy, RetryDirective, RetryStrategy, SpiderStrategyAdapter,
 };
 pub use route::{
-    AdapterKind, AuthSpec, BodyTemplate, CostExtract, EndpointTemplate, ResponseParse,
-    RetryClassifier, Route, RouteId,
+    AdapterKind, AuthSpec, BodyTemplate, CostExtract, EndpointTemplate, GeoCase, GeoParamKind,
+    GeoSpec, ResponseParse, RetryClassifier, Route, RouteId,
 };
 pub use tier::Tier;
 pub use validator::Validator;
