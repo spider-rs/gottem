@@ -1,10 +1,10 @@
 # gottem-cli
 
-The `gottem` command-line binary: a universal scraper that reliably gets the data.
+The `gottem` command-line binary. One URL in, clean content out, cheapest route first.
 
 ## What it does
 
-`gottem` talks to every major scraping vendor — and your local browser — through a single tiered ladder. You give it a URL; it tries the lowest-cost route first, escalates when blocked, races vendors when speed matters, and stops when it gets clean content. Powered by [`spider`](https://github.com/spider-rs/spider).
+`gottem` talks to every major scraping vendor, plus your local browser, through a single tiered ladder. You give it a URL. It tries the cheapest route first, escalates when blocked, races vendors when speed matters, and stops when it gets clean content. Powered by [`spider`](https://github.com/spider-rs/spider).
 
 This crate is the CLI front end for the [gottem](https://github.com/spider-rs/gottem) library workspace.
 
@@ -14,13 +14,13 @@ This crate is the CLI front end for the [gottem](https://github.com/spider-rs/go
 cargo install gottem-cli
 ```
 
-This installs the `gottem` binary on your PATH.
+That puts the `gottem` binary on your PATH.
 
 ## Subcommands
 
 ```
-gottem fetch <url>        lowest-cost first ladder (default), escalates on failure
-gottem probe <url>        sequential tier walk, report which tier yields content
+gottem fetch <url>        cheapest-first ladder (default), escalates on failure
+gottem probe <url>        sequential tier walk, reports which tier yields content
 gottem routes list        tabular catalog dump
 gottem routes show <id>   full detail for one route
 gottem routes validate    verify env vars for every route's auth
@@ -29,7 +29,7 @@ gottem routes validate    verify env vars for every route's auth
 ## Examples
 
 ```bash
-# Inspect what's available — no API keys needed.
+# Inspect what's available. No API keys needed.
 gottem routes list
 gottem routes show spider.smart
 
@@ -37,7 +37,7 @@ gottem routes show spider.smart
 export FIRECRAWL_API_KEY=fc-...
 gottem fetch https://example.com --show-meta
 
-# Race routes in parallel — fastest valid response wins.
+# Race routes in parallel. Fastest valid response wins.
 gottem fetch https://example.com --mode race --routes firecrawl.scrape,spider.http,zenrows.basic
 
 # Hedge: start low-tier, fire a staggered backup after a delay.
@@ -53,10 +53,10 @@ gottem probe https://hard-to-scrape.test
 gottem --config routes.toml fetch https://example.com
 ```
 
-## Run on the hosted API — `--remote`
+## Run on the hosted API with `--remote`
 
 Don't want to manage vendor keys or run a browser? Point the CLI at the hosted
-API ([gottem.dev](https://gottem.dev)) with `--remote` — same flags, run on
+API ([gottem.dev](https://gottem.dev)) with `--remote`. Same flags, run on
 `api.gottem.dev`:
 
 ```bash
@@ -70,7 +70,7 @@ gottem fetch --remote --format json https://example.com
 gottem fetch --remote --api-key gtm_your_key_here https://example.com
 ```
 
-`$GOTTEM_API_URL` overrides the base URL (default `https://api.gottem.dev`).
+`$GOTTEM_API_URL` overrides the base URL, which defaults to `https://api.gottem.dev`.
 
 ## Part of gottem
 

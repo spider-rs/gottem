@@ -1,16 +1,16 @@
 # gottem-core
 
-Universal scraper foundation: route catalog, the `Adapter` trait, and a tiered/race/hedge orchestrator. Powered by [`spider`](https://github.com/spider-rs/spider).
+Universal scraper foundation: route catalog, the `Adapter` trait, and a ladder/race/hedge orchestrator. Powered by [`spider`](https://github.com/spider-rs/spider).
 
 ## What it does
 
-`gottem-core` is the foundation of [gottem](https://github.com/spider-rs/gottem) — one library that talks to every major scraping vendor through a single tiered ladder. It defines three things:
+`gottem-core` is the foundation of [gottem](https://github.com/spider-rs/gottem), one library that talks to every major scraping vendor through a single tiered ladder. It defines three things:
 
-- **`Route`** — a vendor endpoint described as *data* (loaded from TOML, no per-vendor code path). Routes carry a tier, cost, auth spec, body template, and parse + validate rules.
-- **`Adapter`** — a small finite set of protocols (`DirectHttp`, `HttpJson`, `HttpJsonlStream`, `ChromeCdp`, `SpiderLocal`, `Custom`). Adapters are code; routes are config. Adding a vendor is a TOML row, not a release.
-- **`Orchestrator`** — drives requests against a `RouteCatalog` with three modes: lowest-cost first **ladder** (escalate on failure), **race** (parallel, first valid wins), and **hedge** (staggered backups).
+- `Route`, a vendor endpoint described as data, loaded from TOML with no per-vendor code path. Routes carry a tier, cost, auth spec, body template, and parse and validate rules.
+- `Adapter`, a small finite set of protocols (`DirectHttp`, `HttpJson`, `HttpJsonlStream`, `ChromeCdp`, `SpiderLocal`, `Custom`). Adapters are code, routes are config. Adding a vendor is a TOML row, not a release.
+- `Orchestrator`, which drives requests against a `RouteCatalog` in three modes. Ladder is cheapest-first and escalates on failure, race runs routes in parallel and takes the first valid response, and hedge fires staggered backups.
 
-It also re-exports spider's `RetryStrategy` trait family, `HedgeTracker`, `AntiBotTech`, and `RequestProxy`, and adds `WaterfallStats` — learned per-`(route, domain)` ordering that skips the ladder warmup once a route has proven itself.
+It also re-exports spider's `RetryStrategy` trait family, `HedgeTracker`, `AntiBotTech`, and `RequestProxy`, and adds `WaterfallStats`, a learned per-`(route, domain)` ordering that skips the ladder warmup once a route has proven itself.
 
 ## Example
 

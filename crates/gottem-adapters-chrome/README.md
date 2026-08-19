@@ -1,12 +1,12 @@
 # gottem-adapters-chrome
 
-CDP adapter for [gottem](https://github.com/spider-rs/gottem): drives a remote (or local) Chrome over the WebSocket DevTools Protocol. Covers tier T8.
+CDP adapter for [gottem](https://github.com/spider-rs/gottem). Drives a remote or local Chrome over the WebSocket DevTools Protocol, covering tier T8.
 
 ## What it does
 
-Implements the `chrome_cdp` adapter — connects to a Chrome instance via WebSocket and drives it with the DevTools Protocol. It uses `spider::chromiumoxide` (re-exported by spider's `chrome` feature), guaranteeing a single chromiumoxide build across the workspace with no duplicate protocol crates.
+Implements the `chrome_cdp` adapter. It connects to a Chrome instance over WebSocket and drives it with the DevTools Protocol, using `spider::chromiumoxide` (re-exported by spider's `chrome` feature) so the workspace has exactly one chromiumoxide build and no duplicate protocol crates.
 
-Each `execute` call opens a fresh CDP connection so that vendor sessions are properly isolated. The browser handle is dropped at function exit, closing the WebSocket and ending per-session billing.
+Each `execute` call opens a fresh CDP connection, which keeps vendor sessions isolated. The browser handle drops at function exit, closing the WebSocket and ending per-session billing.
 
 ## Vendors covered
 
@@ -19,7 +19,7 @@ Each `execute` call opens a fresh CDP connection so that vendor sessions are pro
 
 ## Cancellation
 
-Connect, navigate, and content extraction are each guarded by `tokio::select!` against the orchestrator's `CancelToken`, with a bounded connect timeout (15s default). The chromiumoxide event handler task is aborted once the fetch resolves.
+Connect, navigate, and content extraction each run under `tokio::select!` against the orchestrator's `CancelToken`, with a bounded connect timeout (15s default). The chromiumoxide event handler task aborts once the fetch resolves.
 
 ## Example
 
@@ -33,7 +33,7 @@ registry.register(ChromeCdpAdapter::arc());
 
 ## Part of gottem
 
-One of the adapter crates of the [gottem](https://github.com/spider-rs/gottem) workspace.
+One of the adapter crates in the [gottem](https://github.com/spider-rs/gottem) workspace.
 
 ## License
 
